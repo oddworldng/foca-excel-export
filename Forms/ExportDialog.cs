@@ -185,19 +185,4 @@ namespace FocaExcelExport.Forms
             return Name;
         }
     }
-    
-    // Class to track export progress
-    public class ExportProgress
-    {
-        public int CurrentRecord { get; set; }
-        public int TotalRecords { get; set; }
-        public string StatusMessage { get; set; }
-        public int PercentComplete 
-        { 
-            get 
-            { 
-                return TotalRecords > 0 ? (int)((double)CurrentRecord / TotalRecords * 100) : 0; 
-            } 
-        }
-    }
 }
