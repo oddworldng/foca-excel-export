@@ -191,32 +191,71 @@ namespace FocaExcelExport
             string projectPkColumn, string filePkColumn, string fileNameColumn, string urlColumn,
             string userNameColumn, string locationColumn, string emailColumn, string clientColumn)
         {
-            // Build the select clause with COALESCE for optional fields
-            string ficheroCol = !string.IsNullOrEmpty(fileNameColumn) ? $"f.[{fileNameColumn}]" : "''";
-            string urlCol = !string.IsNullOrEmpty(urlColumn) ? $"f.[{urlColumn}]" : "''";
-            string usuarioCol = !string.IsNullOrEmpty(userNameColumn) ? $"COALESCE(m.[{userNameColumn}], '')" : "''";
-            string ubicacionCol = !string.IsNullOrEmpty(locationColumn) ? $"COALESCE(m.[{locationColumn}], '')" : "''";
-            string emailCol = !string.IsNullOrEmpty(emailColumn) ? $"COALESCE(m.[{emailColumn}], '')" : "''";
-            string clienteCol = !string.IsNullOrEmpty(clientColumn) ? $"COALESCE(p.[{clientColumn}], '')" : "''";
+            // Based on FOCA migration structure and corrections:
+            // Projects table: Id, ProjectName, Domain
+            // FilesITems table: Id, IdProject(FK), URL, Path, Metadata_Id(FK) 
+            // FilesITems.Metadata_Id → MetaDatas.Id (NOT MetaExtractors directly)
+            // MetaExtractors table: Id, with FKs like FoundUsers_Id, FoundEmails_Id, FoundMetaData_Id
+            // MetaDatas table: Id, with FKs to MetaExtractors via FoundMetaData_Id
+            // UserItems table: Id, Name, Users_Id (FK to Users)
+            // EmailItems table: Id, Mail, Emails_Id (FK to Emails)
+            
+            // For Fichero (file name), use Path with fallback to basename of URL
+            string ficheroCol = "CASE WHEN f.[Path] IS NOT NULL AND LEN(f.[Path]) > 0 THEN f.[Path] ELSE RIGHT(f.[URL], CHARINDEX('/', REVERSE(f.[URL])) - 1) END";
+            // For URL, use the URL column
+            string urlCol = "f.[URL]";
+            // For Usuario (user), join through MetaExtractors -> Users -> UserItems
+            string usuarioCol = "ISNULL(ui.Name, '')";
+            // For Ubicación (location), use Path column
+            string ubicacionCol = "f.[Path]";
+            // For Email, join through MetaExtractors -> Emails -> EmailItems
+            string emailCol = "ISNULL(ei.Mail, '')";
+            // For Cliente (client), use Domain from Projects
+            string clienteCol = "p.[Domain]";
 
-            // Base query joining files and projects
-            string query = $@"
-                SELECT
-                    {ficheroCol} AS [Fichero],
-                    {urlCol} AS [URL],
-                    {usuarioCol} AS [Usuario],
-                    {ubicacionCol} AS [Ubicación],
-                    {emailCol} AS [Email],
-                    {clienteCol} AS [Cliente]
-                FROM [dbo].[{filesTable}] f
-                JOIN [dbo].[{projectsTable}] p ON f.[{projectPkColumn}] = p.[{projectPkColumn}]";
-
-            // Add metadata table if it exists
+            string query;
+            
+            // Handle case where metadata table is found
             if (!string.IsNullOrEmpty(metadataTable))
             {
-                query += $" LEFT JOIN [dbo].[{metadataTable}] m ON m.[{filePkColumn}] = f.[{filePkColumn}]";
+                // Complex query joining files, projects, and metadata tables
+                // FilesITems.Metadata_Id -> MetaExtractors.Id
+                query = $@"
+                    SELECT
+                        {ficheroCol} AS [Fichero],
+                        {urlCol} AS [URL],
+                        {usuarioCol} AS [Usuario],
+                        {ubicacionCol} AS [Ubicación],
+                        {emailCol} AS [Email],
+                        {clienteCol} AS [Cliente]
+                    FROM [dbo].[{filesTable}] f
+                    JOIN [dbo].[{projectsTable}] p ON f.[IdProject] = p.[Id]
+                    LEFT JOIN [dbo].[MetaExtractors] me ON f.[Metadata_Id] = me.[Id]
+                    LEFT JOIN [dbo].[Users] u ON me.[FoundUsers_Id] = u.[Id]
+                    LEFT JOIN [dbo].[UserItems] ui ON ui.[Users_Id] = u.[Id]
+                    LEFT JOIN [dbo].[Emails] e ON me.[FoundEmails_Id] = e.[Id]
+                    LEFT JOIN [dbo].[EmailItems] ei ON ei.[Emails_Id] = e.[Id]
+                    WHERE p.[Id] = @ProjectId
+                    ORDER BY f.[Path], f.[URL]";
+            }
+            else
+            {
+                // Simplified query without metadata
+                query = $@"
+                    SELECT
+                        {ficheroCol} AS [Fichero],
+                        f.[URL] AS [URL],
+                        '' AS [Usuario],
+                        f.[Path] AS [Ubicación],
+                        '' AS [Email],
+                        p.[Domain] AS [Cliente]
+                    FROM [dbo].[{filesTable}] f
+                    JOIN [dbo].[{projectsTable}] p ON f.[IdProject] = p.[Id]
+                    WHERE p.[Id] = @ProjectId
+                    ORDER BY f.[Path], f.[URL]";
             }
 
+            // Apply the WHERE and ORDER BY clauses
             query += $" WHERE p.[{projectPkColumn}] = @ProjectId ORDER BY {ficheroCol}";
 
             return query;

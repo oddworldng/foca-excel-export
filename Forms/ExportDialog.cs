@@ -4,7 +4,7 @@ using System.Windows.Forms;
 using FocaExcelExport.Classes;
 using System.Threading.Tasks;
 
-namespace FocaExcelExport.Forms
+namespace FocaExcelExport
 {
     public partial class ExportDialog : Form
     {
@@ -42,7 +42,7 @@ namespace FocaExcelExport.Forms
                 }
                 
                 var projectIdColumn = await schemaResolver.FindProjectIdColumnAsync(projectsTable);
-                var projectNameColumn = await schemaResolver.FindFileNameColumnAsync(projectsTable); // Name column might be found as FileName in some cases
+                var projectNameColumn = "ProjectName"; // Based on FOCA Project entity structure
                 
                 // If no name column found, try common name columns
                 if (string.IsNullOrEmpty(projectNameColumn) || projectNameColumn == projectIdColumn)

@@ -63,144 +63,51 @@ namespace FocaExcelExport.Classes
         }
 
         /// <summary>
-        /// Find the projects table based on common column names
+        /// Find the projects table based on FOCA Entity Framework structure
+        /// From migrations: Table "Projects" with columns Id and ProjectName
         /// </summary>
         public async Task<string> FindProjectsTableAsync()
         {
             var tables = await GetTablesAsync();
             
-            foreach (var table in tables)
+            // Based on migration file, FOCA uses exact table name "Projects"
+            if (tables.Contains("Projects"))
             {
-                var columns = await GetColumnsAsync(table);
-                
-                // Look for project-related columns
-                if (columns.Any(c => c.ToLower().Contains("project") && c.ToLower().Contains("id")) ||
-                    columns.Any(c => c.ToLower().Contains("name")) ||
-                    columns.Any(c => c.ToLower().Contains("title")) ||
-                    columns.Any(c => c.ToLower().Contains("project")))
-                {
-                    // Additional check for project characteristics
-                    if (columns.Contains("Id") || columns.Any(c => c.ToLower().Contains("projectid")))
-                    {
-                        return table;
-                    }
-                }
-            }
-            
-            // If no specific project table found, look for common names
-            var possibleProjectTables = new[] { "Projects", "Project", "TblProjects", "ProjectInfo", "tblProjects" };
-            foreach (var possibleTable in possibleProjectTables)
-            {
-                if (tables.Contains(possibleTable))
-                {
-                    return possibleTable;
-                }
-            }
-            
-            // Return the first table that has both an ID and a name field
-            foreach (var table in tables)
-            {
-                var columns = await GetColumnsAsync(table);
-                if (columns.Contains("Id") && (columns.Any(c => c.ToLower().Contains("name")) || columns.Any(c => c.ToLower().Contains("title"))))
-                {
-                    return table;
-                }
+                return "Projects";
             }
             
             return tables.FirstOrDefault(); // Fallback
         }
 
         /// <summary>
-        /// Find the files table based on common column names
+        /// Find the files table based on FOCA Entity Framework structure
+        /// From migrations: Table "FilesITems" (note the 's' at the end) with columns Id, IdProject, URL, Path, etc.
         /// </summary>
         public async Task<string> FindFilesTableAsync()
         {
             var tables = await GetTablesAsync();
             
-            foreach (var table in tables)
+            // Based on migration file, FOCA uses exact table name "FilesITems" (note the 's' at the end)
+            if (tables.Contains("FilesITems"))
             {
-                var columns = await GetColumnsAsync(table);
-                
-                // Look for file-related columns
-                if (columns.Any(c => c.ToLower().Contains("file") && c.ToLower().Contains("id")) ||
-                    columns.Any(c => c.ToLower().Contains("filename")) ||
-                    columns.Any(c => c.ToLower().Contains("filepath")) ||
-                    columns.Any(c => c.ToLower().Contains("url")) ||
-                    columns.Any(c => c.ToLower().Contains("file")))
-                {
-                    // Additional check for file characteristics
-                    if (columns.Contains("Id") || columns.Any(c => c.ToLower().Contains("fileid")))
-                    {
-                        return table;
-                    }
-                }
-            }
-            
-            // If no specific file table found, look for common names
-            var possibleFileTables = new[] { "Files", "File", "TblFiles", "FileInfo", "Documents", "tblFiles" };
-            foreach (var possibleTable in possibleFileTables)
-            {
-                if (tables.Contains(possibleTable))
-                {
-                    return possibleTable;
-                }
-            }
-            
-            // Return the first table that has file characteristics
-            foreach (var table in tables)
-            {
-                var columns = await GetColumnsAsync(table);
-                if (columns.Any(c => c.ToLower().Contains("file")) || columns.Any(c => c.ToLower().Contains("url")))
-                {
-                    return table;
-                }
+                return "FilesITems";
             }
             
             return tables.FirstOrDefault(); // Fallback
         }
 
         /// <summary>
-        /// Find the metadata table based on common column names
+        /// Find the metadata table based on FOCA Entity Framework structure
+        /// From migrations: Table "MetaExtractors" with relationships to FoundUsers_Id, FoundEmails_Id, etc.
         /// </summary>
         public async Task<string> FindMetadataTableAsync()
         {
             var tables = await GetTablesAsync();
             
-            foreach (var table in tables)
+            // Based on migration file, FOCA uses exact table name "MetaExtractors"
+            if (tables.Contains("MetaExtractors"))
             {
-                var columns = await GetColumnsAsync(table);
-                
-                // Look for metadata-related columns (user, email, location, etc.)
-                var hasUserRelated = columns.Any(c => c.ToLower().Contains("user") || c.ToLower().Contains("name"));
-                var hasEmail = columns.Any(c => c.ToLower().Contains("email"));
-                var hasLocation = columns.Any(c => c.ToLower().Contains("location") || c.ToLower().Contains("path"));
-                
-                if (hasUserRelated && (hasEmail || hasLocation))
-                {
-                    return table;
-                }
-            }
-            
-            // If no specific metadata table found, look for common names
-            var possibleMetadataTables = new[] { "Metadata", "FileMetadata", "UserMetadata", "DocumentMetadata", "UserInfo", "TblMetadata" };
-            foreach (var possibleTable in possibleMetadataTables)
-            {
-                if (tables.Contains(possibleTable))
-                {
-                    return possibleTable;
-                }
-            }
-            
-            // Return the first table with user-related data
-            foreach (var table in tables)
-            {
-                var columns = await GetColumnsAsync(table);
-                if (columns.Any(c => c.ToLower().Contains("user")) || 
-                    columns.Any(c => c.ToLower().Contains("email")) || 
-                    columns.Any(c => c.ToLower().Contains("location")))
-                {
-                    return table;
-                }
+                return "MetaExtractors";
             }
             
             return null; // It's ok if no metadata table is found
@@ -208,30 +115,19 @@ namespace FocaExcelExport.Classes
 
         /// <summary>
         /// Find the column name for project ID in a table
+        /// Based on FOCA Entity Framework, this should be "Id" (capitalized)
         /// </summary>
         public async Task<string> FindProjectIdColumnAsync(string tableName)
         {
             var columns = await GetColumnsAsync(tableName);
             
-            var possibleProjectIdColumns = new[] { "ProjectId", "Project_ID", "Project_Id", "projectId", "projectid", "Projectid" };
-            foreach (var col in possibleProjectIdColumns)
+            // Based on FOCA EF structure, the ID column is "Id" (capitalized)
+            if (columns.Contains("Id"))
             {
-                if (columns.Contains(col))
-                {
-                    return col;
-                }
+                return "Id";
             }
             
-            // Look for any column containing both project and id
-            foreach (var col in columns)
-            {
-                if (col.ToLower().Contains("project") && col.ToLower().Contains("id"))
-                {
-                    return col;
-                }
-            }
-            
-            return columns.FirstOrDefault(c => c.ToLower().Contains("project")); // Fallback
+            return "Id"; // Default based on Entity Framework conventions
         }
 
         /// <summary>
@@ -241,176 +137,104 @@ namespace FocaExcelExport.Classes
         {
             var columns = await GetColumnsAsync(tableName);
             
-            var possibleFileIdColumns = new[] { "FileId", "File_ID", "File_Id", "fileId", "fileid", "Fileid" };
-            foreach (var col in possibleFileIdColumns)
+            // Based on FOCA Entity Framework, the ID column is "Id" (standard EF convention)
+            if (columns.Contains("Id"))
             {
-                if (columns.Contains(col))
-                {
-                    return col;
-                }
+                return "Id";
             }
             
-            // Look for any column containing both file and id
-            foreach (var col in columns)
-            {
-                if (col.ToLower().Contains("file") && col.ToLower().Contains("id"))
-                {
-                    return col;
-                }
-            }
-            
-            return columns.FirstOrDefault(c => c.ToLower().Contains("file")); // Fallback
+            return "Id"; // Default based on Entity Framework conventions
         }
 
         /// <summary>
-        /// Find the column name for file name in a table
+        /// Find the column name for project name in a table
+        /// Based on FOCA Project entity, this should be "ProjectName"
         /// </summary>
         public async Task<string> FindFileNameColumnAsync(string tableName)
         {
             var columns = await GetColumnsAsync(tableName);
             
-            var possibleFileNameColumns = new[] { "FileName", "File_Name", "filename", "Name", "name", "Title", "title", "RealName" };
-            foreach (var col in possibleFileNameColumns)
+            // Based on FOCA Project entity structure, the project name column is "ProjectName"
+            if (tableName == "Projects" && columns.Contains("ProjectName"))
             {
-                if (columns.Contains(col))
-                {
-                    return col;
-                }
+                return "ProjectName";
             }
             
-            // Look for any column that might contain file information
-            foreach (var col in columns)
+            // For file names in files table, the URL column contains the file reference
+            if (tableName == "FilesITems" && columns.Contains("URL"))
             {
-                if (col.ToLower().Contains("file") && !col.ToLower().Contains("id"))
-                {
-                    return col;
-                }
-                if (col.ToLower().Contains("name") && !col.ToLower().Contains("user"))
-                {
-                    return col;
-                }
+                return "URL";
             }
             
-            return columns.FirstOrDefault(); // Fallback
+            return "ProjectName"; // Default for projects table
         }
 
         /// <summary>
         /// Find the column name for URL in a table
+        /// Based on FOCA FilesITems entity, this should be "URL"
         /// </summary>
         public async Task<string> FindUrlColumnAsync(string tableName)
         {
             var columns = await GetColumnsAsync(tableName);
             
-            var possibleUrlColumns = new[] { "Url", "URL", "url", "FullUrl", "Full_URL", "Path", "URLPath", "FileUrl", "DocumentUrl" };
-            foreach (var col in possibleUrlColumns)
+            // Based on FOCA FilesITems entity structure from migrations, the URL column is "URL"
+            if (columns.Contains("URL"))
             {
-                if (columns.Contains(col))
-                {
-                    return col;
-                }
+                return "URL";
             }
             
-            // Look for any column that might contain URL information
-            foreach (var col in columns)
-            {
-                if (col.ToLower().Contains("url") || col.ToLower().Contains("path"))
-                {
-                    return col;
-                }
-            }
-            
-            return null; // May not exist in this table
+            return "URL"; // Default based on FOCA structure
         }
 
         /// <summary>
         /// Find the column name for user name in a table
+        /// Based on FOCA structure, users are in UserItems table with "Name" column
         /// </summary>
         public async Task<string> FindUserNameColumnAsync(string tableName)
         {
             var columns = await GetColumnsAsync(tableName);
             
-            var possibleUserColumns = new[] { 
-                "UserName", "User_Name", "username", "User", "user", "Name", "name", 
-                "FullName", "First_Name", "Last_Name", "Author", "Owner", "CreatedBy", "Creator" 
-            };
-            foreach (var col in possibleUserColumns)
+            // Based on migrations, UserItems table has "Name" column
+            if (columns.Contains("Name"))
             {
-                if (columns.Contains(col))
-                {
-                    return col;
-                }
+                return "Name";
             }
             
-            // Look for any column that might contain user information
-            foreach (var col in columns)
-            {
-                if (col.ToLower().Contains("user") || col.ToLower().Contains("name") || col.ToLower().Contains("author"))
-                {
-                    return col;
-                }
-            }
-            
-            return null; // May not exist in this table
+            return "Name"; // Default based on FOCA UserItems structure
         }
 
         /// <summary>
         /// Find the column name for location/path in a table
+        /// Based on FOCA FilesItem entity, this should be "Path"
         /// </summary>
         public async Task<string> FindLocationColumnAsync(string tableName)
         {
             var columns = await GetColumnsAsync(tableName);
             
-            var possibleLocationColumns = new[] { 
-                "Location", "location", "Path", "path", "FilePath", "File_Path", "Directory", 
-                "Dir", "NetworkPath", "Network_Path", "LocationPath", "Location_Path" 
-            };
-            foreach (var col in possibleLocationColumns)
+            // Based on FOCA FilesITems entity structure from migrations, the path column is "Path"
+            if (columns.Contains("Path"))
             {
-                if (columns.Contains(col))
-                {
-                    return col;
-                }
+                return "Path";
             }
             
-            // Look for any column that might contain location information
-            foreach (var col in columns)
-            {
-                if (col.ToLower().Contains("location") || col.ToLower().Contains("path") || 
-                    col.ToLower().Contains("dir") || col.ToLower().Contains("folder"))
-                {
-                    return col;
-                }
-            }
-            
-            return null; // May not exist in this table
+            return "Path"; // Default based on FOCA structure
         }
 
         /// <summary>
         /// Find the column name for email in a table
+        /// Based on FOCA structure, emails are in EmailsItems table with "Mail" column
         /// </summary>
         public async Task<string> FindEmailColumnAsync(string tableName)
         {
             var columns = await GetColumnsAsync(tableName);
             
-            var possibleEmailColumns = new[] { "Email", "email", "EmailAddr", "EmailAddress", "EMail", "Email_Address" };
-            foreach (var col in possibleEmailColumns)
+            // Based on migrations, EmailsItems table has "Mail" column
+            if (columns.Contains("Mail"))
             {
-                if (columns.Contains(col))
-                {
-                    return col;
-                }
+                return "Mail";
             }
             
-            // Look for any column that might contain email information
-            foreach (var col in columns)
-            {
-                if (col.ToLower().Contains("email"))
-                {
-                    return col;
-                }
-            }
-            
-            return null; // May not exist in this table
+            return "Mail"; // Default based on FOCA EmailsItems structure
         }
 
         /// <summary>

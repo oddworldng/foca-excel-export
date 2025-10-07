@@ -1,4 +1,4 @@
-namespace FocaExcelExport.Forms
+namespace FocaExcelExport
 {
     partial class ExportDialog
     {

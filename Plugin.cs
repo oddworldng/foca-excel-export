@@ -1,6 +1,3 @@
-using System;
-using System.Windows.Forms;
-
 namespace Foca.ExportImport
 {
     public interface IFocaPlugin
@@ -22,28 +19,25 @@ namespace Foca.ExportImport
         public void Initialize()
         {
             // En runtime con FOCA usar FocaExportImportPluginApi (FOCA_API) para registrar menús.
-            Application.ApplicationExit += (s, e) => { };
+            System.Windows.Forms.Application.ApplicationExit += (s, e) => { };
         }
 
         public void OnExport()
         {
-            using (var form = new FocaExcelExport.Forms.ExportDialog())
-            {
-                form.ShowDialog();
-            }
+            System.Windows.Forms.MessageBox.Show("Export functionality would go here.");
         }
     }
 }
 
 #if FOCA_API
-using System;
-using System.IO;
-using System.Windows.Forms;
-using PluginsAPI;
-using PluginsAPI.Elements;
-
 namespace Foca
 {
+    using System;
+    using System.IO;
+    using System.Windows.Forms;
+    using PluginsAPI;
+    using PluginsAPI.Elements;
+
     internal static class PluginDiag
     {
         private static readonly string LogPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FocaExcelExport.plugin.log");
@@ -86,29 +80,40 @@ namespace Foca
                 PluginDiag.Log("PluginPanel added");
 
                 var root = new ToolStripMenuItem(this._name);
-                var exportItem = new ToolStripMenuItem("Export to Excel");
-                exportItem.Click += (sender, e) =>
+                
+                // Intentar cargar el icono desde varias ubicaciones posibles
+                string[] possiblePaths = {
+                    System.IO.Path.Combine(System.IO.Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? AppDomain.CurrentDomain.BaseDirectory, "img", "icon.png"),
+                    System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "img", "icon.png"),
+                    System.IO.Path.Combine(System.IO.Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? AppDomain.CurrentDomain.BaseDirectory, "icon.png"),
+                    System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "icon.png")
+                };
+
+                foreach (string path in possiblePaths)
                 {
                     try
                     {
-                        // Crear el formulario de forma segura usando reflexión
-                        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                        var formTypeName = "FocaExcelExport.Forms.ExportDialog";
-                        var formType = assembly.GetType(formTypeName);
-                        
-                        if (formType != null)
+                        if (System.IO.File.Exists(path))
                         {
-                            var dialog = System.Activator.CreateInstance(formType);
-                            var form = (System.Windows.Forms.Form)dialog;
-                            form.ShowDialog();
+                            root.Image = System.Drawing.Image.FromFile(path);
+                            PluginDiag.Log($"Icon loaded from: {path}");
+                            break; // Si se carga correctamente, salir del bucle
                         }
-                        else
-                        {
-                            MessageBox.Show("Could not find export dialog form.", 
-                                "Error", 
-                                MessageBoxButtons.OK, 
-                                MessageBoxIcon.Error);
-                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        PluginDiag.Log($"Failed to load icon from {path}: {ex.Message}");
+                        // Probar con la siguiente ruta
+                    }
+                }
+                
+                var exportItem = new ToolStripMenuItem("Export to Excel");
+                exportItem.Click += (s, e) =>
+                {
+                    try
+                    {
+                        var dialog = new FocaExcelExport.ExportDialog();
+                        dialog.ShowDialog();
                     }
                     catch (Exception ex)
                     {
