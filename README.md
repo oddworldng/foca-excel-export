@@ -52,7 +52,7 @@ FocaExcelExport is a plugin for FOCA (Forensic Case Analyzer) that allows users 
 ## Project Structure
 
 ```
-FocaExcelExport/
+foca-excel-export/
 ├── Classes/
 │   ├── ConnectionResolver.cs     # Reads FOCA's database connection string
 │   ├── Exporter.cs              # Performs database queries and Excel generation
@@ -63,9 +63,11 @@ FocaExcelExport/
 ├── Properties/
 │   └── AssemblyInfo.cs          # Assembly metadata
 ├── FocaExcelExport.csproj       # Project file
+├── FocaExcelExport.sln          # Solution file
 ├── Plugin.cs                    # Main plugin class implementing FOCA interface
 ├── packages.config              # NuGet package dependencies
-└── README.md                    # This file
+├── README.md                    # This file
+└── LICENSE                      # MIT License
 ```
 
 ## License
