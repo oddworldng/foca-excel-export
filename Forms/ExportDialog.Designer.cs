@@ -48,9 +48,11 @@ namespace FocaExcelExport
             // 
             this.btnExport.Location = new System.Drawing.Point(371, 34);
             this.btnExport.Name = "btnExport";
-            this.btnExport.Size = new System.Drawing.Size(75, 23);
+            this.btnExport.Size = new System.Drawing.Size(100, 23);
             this.btnExport.TabIndex = 1;
-            this.btnExport.Text = "Export";
+            this.btnExport.Text = "Exportar";
+            this.btnExport.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.btnExport.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText;
             this.btnExport.UseVisualStyleBackColor = true;
             this.btnExport.Click += new System.EventHandler(this.btnExport_Click);
             // 
@@ -77,7 +79,7 @@ namespace FocaExcelExport
             this.lblSelectProject.Name = "lblSelectProject";
             this.lblSelectProject.Size = new System.Drawing.Size(84, 13);
             this.lblSelectProject.TabIndex = 4;
-            this.lblSelectProject.Text = "Select a project:";
+            this.lblSelectProject.Text = "Selecciona un proyecto:";
             // 
             // ExportDialog
             // 
@@ -95,7 +97,7 @@ namespace FocaExcelExport
             this.Name = "ExportDialog";
             this.ShowInTaskbar = false;
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "Export to Excel";
+            this.Text = "Exportar a Excel";
             this.Load += new System.EventHandler(this.ExportDialog_Load);
             this.ResumeLayout(false);
             this.PerformLayout();

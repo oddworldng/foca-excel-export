@@ -39,6 +39,15 @@ namespace FocaExcelExport.Classes
         }
 
         /// <summary>
+        /// Check if a table exists by exact name
+        /// </summary>
+        public async Task<bool> TableExistsAsync(string tableName)
+        {
+            var tables = await GetTablesAsync();
+            return tables.Contains(tableName);
+        }
+
+        /// <summary>
         /// Get all columns for a specific table
         /// </summary>
         public async Task<List<string>> GetColumnsAsync(string tableName)
@@ -97,6 +106,31 @@ namespace FocaExcelExport.Classes
         }
 
         /// <summary>
+        /// Find the likely foreign key column in files table that references projects (e.g., IdProject, ProjectId)
+        /// </summary>
+        public async Task<string> FindFilesProjectFkColumnAsync(string filesTable)
+        {
+            var columns = await GetColumnsAsync(filesTable);
+
+            // Prefer exact common names first
+            var preferred = new[] { "IdProject", "ProjectId", "Projects_Id" };
+            foreach (var name in preferred)
+            {
+                if (columns.Contains(name)) return name;
+            }
+
+            // Heuristic: contains both "project" and "id"
+            var heuristic = columns.FirstOrDefault(c => c.IndexOf("project", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                                                        c.IndexOf("id", StringComparison.OrdinalIgnoreCase) >= 0);
+            if (!string.IsNullOrEmpty(heuristic)) return heuristic;
+
+            // Fallback to first column that ends with Id and is not the primary key Id
+            var alt = columns.FirstOrDefault(c => !string.Equals(c, "Id", StringComparison.OrdinalIgnoreCase) &&
+                                                  c.EndsWith("Id", StringComparison.OrdinalIgnoreCase));
+            return alt ?? "IdProject"; // conservative default
+        }
+
+        /// <summary>
         /// Find the metadata table based on FOCA Entity Framework structure
         /// From migrations: Table "MetaExtractors" with relationships to FoundUsers_Id, FoundEmails_Id, etc.
         /// </summary>
@@ -111,6 +145,49 @@ namespace FocaExcelExport.Classes
             }
             
             return null; // It's ok if no metadata table is found
+        }
+
+        /// <summary>
+        /// Find EmailItems-like table (EmailItems or EmailsItems)
+        /// </summary>
+        public async Task<string> FindEmailItemsTableAsync()
+        {
+            var tables = await GetTablesAsync();
+            if (tables.Contains("EmailItems")) return "EmailItems";
+            if (tables.Contains("EmailsItems")) return "EmailsItems";
+
+            // Heuristic by columns
+            foreach (var t in tables)
+            {
+                if (t.IndexOf("Email", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    t.IndexOf("Item", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    var cols = await GetColumnsAsync(t);
+                    if (cols.Contains("Mail")) return t;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Find UserItems-like table (UserItems or UsersItems)
+        /// </summary>
+        public async Task<string> FindUserItemsTableAsync()
+        {
+            var tables = await GetTablesAsync();
+            if (tables.Contains("UserItems")) return "UserItems";
+            if (tables.Contains("UsersItems")) return "UsersItems";
+
+            foreach (var t in tables)
+            {
+                if (t.IndexOf("User", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    t.IndexOf("Item", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    var cols = await GetColumnsAsync(t);
+                    if (cols.Contains("Name")) return t;
+                }
+            }
+            return null;
         }
 
         /// <summary>
@@ -245,7 +322,7 @@ namespace FocaExcelExport.Classes
             var columns = await GetColumnsAsync(tableName);
             
             var possibleClientColumns = new[] { 
-                "Client", "client", "ClientName", "Client_Name", "Company", "Organization", 
+                "Domain", "Client", "client", "ClientName", "Client_Name", "Company", "Organization", 
                 "Team", "TeamName", "OrganizationName", "Customer", "CustomerName", "Cliente" 
             };
             foreach (var col in possibleClientColumns)

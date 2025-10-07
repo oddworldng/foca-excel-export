@@ -14,6 +14,16 @@ namespace FocaExcelExport
         {
             InitializeComponent();
             _connectionString = ConnectionResolver.GetFocaConnectionString();
+            try
+            {
+                var stream = typeof(ExportDialog).Assembly.GetManifestResourceStream("FocaExcelExport.img.export.png");
+                if (stream != null)
+                {
+                    var img = System.Drawing.Image.FromStream(stream);
+                    this.btnExport.Image = new System.Drawing.Bitmap(img, new System.Drawing.Size(16, 16));
+                }
+            }
+            catch { }
         }
 
         private async void ExportDialog_Load(object sender, EventArgs e)
@@ -25,7 +35,7 @@ namespace FocaExcelExport
         {
             try
             {
-                lblStatus.Text = "Loading projects...";
+                lblStatus.Text = "Cargando proyectos...";
                 progressBar.Visible = true;
                 progressBar.Style = ProgressBarStyle.Marquee;
                 
@@ -35,9 +45,9 @@ namespace FocaExcelExport
                 // If we couldn't find a projects table, show error and disable export
                 if (string.IsNullOrEmpty(projectsTable))
                 {
-                    MessageBox.Show("Could not find projects table in the database.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show("No se pudo encontrar la tabla de proyectos en la base de datos.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                     btnExport.Enabled = false;
-                    lblStatus.Text = "Error: Could not find projects table.";
+                    lblStatus.Text = "Error: no se encontró la tabla de proyectos.";
                     return;
                 }
                 
@@ -92,11 +102,11 @@ namespace FocaExcelExport
                 if (cmbProjects.Items.Count > 0)
                 {
                     cmbProjects.SelectedIndex = 0;
-                    lblStatus.Text = $"Loaded {cmbProjects.Items.Count} projects.";
+                    lblStatus.Text = $"Cargados {cmbProjects.Items.Count} proyectos.";
                 }
                 else
                 {
-                    lblStatus.Text = "No projects found in the database.";
+                    lblStatus.Text = "No se encontraron proyectos en la base de datos.";
                     btnExport.Enabled = false;
                 }
             }
@@ -117,7 +127,7 @@ namespace FocaExcelExport
         {
             if (cmbProjects.SelectedItem == null)
             {
-                MessageBox.Show("Please select a project to export.", "No Project Selected", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                MessageBox.Show("Selecciona un proyecto para exportar.", "Proyecto no seleccionado", MessageBoxButtons.OK, MessageBoxIcon.Warning);
                 return;
             }
 
@@ -126,13 +136,28 @@ namespace FocaExcelExport
             // Show save file dialog
             using (var saveDialog = new SaveFileDialog())
             {
-                saveDialog.Filter = "Excel files (*.xlsx)|*.xlsx|All files (*.*)|*.*";
-                saveDialog.Title = "Save Exported Data";
+                saveDialog.Filter = "Archivos de Excel (*.xlsx)|*.xlsx|Todos los archivos (*.*)|*.*";
+                saveDialog.Title = "Guardar datos exportados";
                 saveDialog.FileName = $"foca_export_{selectedProject.Name}_{DateTime.Now:yyyyMMdd}.xlsx";
                 
                 if (saveDialog.ShowDialog() == DialogResult.OK)
                 {
-                    await ExportProjectAsync(selectedProject, saveDialog.FileName);
+                    try
+                    {
+                        await ExportProjectAsync(selectedProject, saveDialog.FileName);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Mostrar información detallada de diagnóstico
+                        var errorMessage = $"Error durante la exportación: {ex.Message}\n\n";
+                        errorMessage += $"Excepción interna: {ex.InnerException?.Message}\n\n";
+                        errorMessage += $"Traza: {ex.StackTrace}";
+                        
+                        MessageBox.Show(errorMessage, 
+                            "Error de exportación", 
+                            MessageBoxButtons.OK, 
+                            MessageBoxIcon.Error);
+                    }
                 }
             }
         }
@@ -145,25 +170,28 @@ namespace FocaExcelExport
                 progressBar.Visible = true;
                 progressBar.Style = ProgressBarStyle.Continuous;
                 progressBar.Value = 0;
-                lblStatus.Text = "Starting export...";
+                lblStatus.Text = "Iniciando exportación...";
                 
                 var exporter = new Exporter(_connectionString);
                 
                 // Set up progress reporting
                 var progress = new Progress<ExportProgress>(progressReport =>
                 {
-                    progressBar.Value = progressReport.PercentComplete;
-                    lblStatus.Text = $"{progressReport.CurrentRecord} of {progressReport.TotalRecords} records processed - {progressReport.StatusMessage}";
+                    var value = progressReport.PercentComplete;
+                    if (value < progressBar.Minimum) value = progressBar.Minimum;
+                    if (value > progressBar.Maximum) value = progressBar.Maximum;
+                    progressBar.Value = value;
+                    lblStatus.Text = $"{progressReport.CurrentRecord} de {progressReport.TotalRecords} registros procesados - {progressReport.StatusMessage}";
                 });
                 
                 await exporter.ExportToExcelAsync(project.Id, fileName, progress);
                 
-                lblStatus.Text = "Export completed successfully!";
-                MessageBox.Show("Export completed successfully!", "Success", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                lblStatus.Text = "¡Exportación completada con éxito!";
+                MessageBox.Show("¡Exportación completada con éxito!", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Error during export: {ex.Message}", "Export Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"Error durante la exportación: {ex.Message}", "Error de exportación", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 lblStatus.Text = $"Error: {ex.Message}";
             }
             finally

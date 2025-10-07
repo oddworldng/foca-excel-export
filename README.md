@@ -1,93 +1,67 @@
 # FocaExcelExport
 
-FOCA plugin to export project metadata (files, URLs, users, locations, emails, client) to Excel.
+Plugin de FOCA para exportar a Excel los metadatos de un proyecto: Fichero, URL, Usuario, Ubicación, Email y Cliente. Probado con FOCA Open Source v3.4.7.1.
 
-## Overview
+## Descripción
 
-FocaExcelExport is a plugin for FOCA (Forensic Case Analyzer) that allows users to export project metadata to Excel format. The plugin integrates with FOCA's menu system and provides a WinForms dialog to select projects and export their metadata.
+FocaExcelExport añade al menú de FOCA la opción “Exportar a Excel”. Al seleccionarla se abre un diálogo WinForms que permite elegir un proyecto de la base de datos de FOCA y exportar su información a un fichero `.xlsx` usando ClosedXML (no requiere Excel instalado).
 
-## Features
+## Funcionalidades
 
-- Export FOCA project metadata to Excel (.xlsx) files
-- Dynamic database schema detection
-- Progress tracking during export
-- User-friendly interface with project selection dropdown
+- Exportación a Excel con cabeceras: `Fichero, URL, Usuario, Ubicación, Email, Cliente`.
+- Detección dinámica del esquema de la BD (tablas y columnas), compatible con variaciones típicas de FOCA (`FilesITems`, `MetaExtractors`, `EmailsItems/EmailItems`, `UsersItems/UserItems`, etc.).
+- Lectura automática del connection string de FOCA vía `ConfigurationManager.ConnectionStrings`.
+- Progreso de exportación con barra y mensajes.
+- Iconos embebidos en el ensamblado (no se requieren archivos externos para los iconos del menú/botón).
 
-## Requirements
+## Requisitos
 
-- FOCA (Forensic Case Analyzer)
-- .NET Framework 4.7.1 or higher
-- Microsoft SQL Server database (used by FOCA)
+- FOCA v3.4.7.1
+- .NET Framework 4.7.1
+- SQL Server (BD de FOCA)
 
-## Installation
+## Instalación
 
-1. Build the FocaExcelExport project
-2. Copy the generated `FocaExcelExport.dll` file to FOCA's `Plugins` folder
-3. Ensure the ClosedXML dependency is available (either install via NuGet in FOCA's environment or include the DLLs with the plugin)
-4. Restart FOCA
+1. Compila el proyecto en Visual Studio (ver “Compilación”).
+2. Copia el contenido de la carpeta de salida del proyecto en la carpeta `Plugins` de FOCA. Por defecto el proyecto genera la salida en `plugin\`:
+   ```
+   Plugins/
+     FocaExcelExport.dll
+     lib/
+       ClosedXML.dll
+       DocumentFormat.OpenXml.dll
+       ExcelNumberFormat.dll
+       System.IO.Packaging.dll
+   ```
+   Nota: las dependencias se copian automáticamente a `plugin\lib` durante el build y el plugin las carga desde `Plugins/lib` mediante un `AssemblyResolver` propio.
+3. Reinicia FOCA.
 
-## Usage
+## Uso
 
-1. Open FOCA
-2. Navigate to the **Export to Excel** option in the menu
-3. Select a project from the dropdown list
-4. Click **Export** button
-5. Choose a destination file using the save dialog
-6. The Excel file will be generated with the following columns:
-   - Fichero (real file name)
-   - URL (URL where the file was found)
-   - Usuario (extracted username)
-   - Ubicación (network path or file location)
-   - Email (email of the user)
-   - Cliente (name of the client or machine)
+1. Abre FOCA.
+2. Menú Plugins → “Exportar a Excel”.
+3. Selecciona el proyecto.
+4. Pulsa “Exportar” y elige el fichero de destino `.xlsx`.
 
-## Building from Source
+## Compilación
 
-1. Open the solution in Visual Studio
-2. Ensure .NET Framework 4.7.1 is targeted
-3. Restore NuGet packages (ClosedXML and DocumentFormat.OpenXml)
-4. Build the solution
-5. The plugin DLL will be available in the bin directory
+1. Abre la solución en Visual Studio (target .NET Framework 4.7.1).
+2. Restaura paquetes NuGet. Solo se referencia `ClosedXML` de forma directa; el resto se resuelve transitivamente.
+3. Compila. La salida se genera en `plugin\` y el target MSBuild copia las DLL necesarias a `plugin\lib`.
 
-## Project Structure
+## Estructura del proyecto
 
 ```
 foca-excel-export/
 ├── Classes/
-│   ├── ConnectionResolver.cs     # Reads FOCA's database connection string
-│   ├── Exporter.cs              # Performs database queries and Excel generation
-│   └── SchemaResolver.cs        # Discovers table and column names dynamically
+│   ├── AssemblyResolver.cs     # Carga dependencias desde Plugins/lib
+│   ├── ConnectionResolver.cs   # Lee el connection string de FOCA
+│   ├── Exporter.cs             # Consulta SQL dinámica y generación del Excel
+│   └── SchemaResolver.cs       # Descubre tablas/columnas (INFORMATION_SCHEMA)
 ├── Forms/
-│   ├── ExportDialog.cs          # Main form with UI controls
-│   └── ExportDialog.Designer.cs # Form designer code
-├── Properties/
-│   └── AssemblyInfo.cs          # Assembly metadata
-├── FocaExcelExport.csproj       # Project file
-├── FocaExcelExport.sln          # Solution file
-├── Plugin.cs                    # Main plugin class implementing FOCA interface
-├── packages.config              # NuGet package dependencies
-├── README.md                    # This file
-└── LICENSE                      # MIT License
+│   ├── ExportDialog.cs         # Diálogo principal (ComboBox, Botón, ProgressBar, Label)
+│   └── ExportDialog.Designer.cs
+├── Plugin.cs                   # Registro de menú e icono embebido
+├── FocaExcelExport.csproj      # Proyecto (.NET Framework 4.7.1)
+└── README.md
 ```
-
-## License
-
-MIT License
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.

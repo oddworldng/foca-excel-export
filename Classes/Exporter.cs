@@ -8,7 +8,7 @@ using FocaExcelExport.Classes;
 namespace FocaExcelExport
 {
     // Class to track export progress
-    public class ExportProgress
+        public class ExportProgress
     {
         public int CurrentRecord { get; set; }
         public int TotalRecords { get; set; }
@@ -17,7 +17,11 @@ namespace FocaExcelExport
         { 
             get 
             { 
-                return TotalRecords > 0 ? (int)((double)CurrentRecord / TotalRecords * 100) : 0; 
+                if (TotalRecords <= 0) return 0;
+                var pct = (int)Math.Round((double)CurrentRecord * 100.0 / TotalRecords);
+                if (pct < 0) pct = 0;
+                if (pct > 100) pct = 100;
+                return pct; 
             } 
         }
     }
@@ -41,10 +45,13 @@ namespace FocaExcelExport
                 var projectsTable = await schemaResolver.FindProjectsTableAsync();
                 var filesTable = await schemaResolver.FindFilesTableAsync();
                 var metadataTable = await schemaResolver.FindMetadataTableAsync();
+                var emailItemsTable = await schemaResolver.FindEmailItemsTableAsync();
+                var userItemsTable = await schemaResolver.FindUserItemsTableAsync();
 
                 // Find relevant columns
                 var projectPkColumn = await schemaResolver.FindProjectIdColumnAsync(projectsTable);
                 var filePkColumn = await schemaResolver.FindFileIdColumnAsync(filesTable);
+                var filesProjectFkColumn = await schemaResolver.FindFilesProjectFkColumnAsync(filesTable);
                 
                 var fileNameColumn = await schemaResolver.FindFileNameColumnAsync(filesTable);
                 var urlColumn = await schemaResolver.FindUrlColumnAsync(filesTable);
@@ -56,7 +63,7 @@ namespace FocaExcelExport
 
                 // Count total records for progress
                 var totalRecords = await GetRecordCountAsync(projectId, projectsTable, filesTable, metadataTable, 
-                    projectPkColumn, filePkColumn);
+                    projectPkColumn, filePkColumn, filesProjectFkColumn);
                 
                 int currentRecord = 0;
                 progress?.Report(new ExportProgress 
@@ -68,8 +75,8 @@ namespace FocaExcelExport
 
                 // Build dynamic SQL query
                 var query = BuildExportQuery(projectsTable, filesTable, metadataTable, 
-                    projectPkColumn, filePkColumn, fileNameColumn, urlColumn, 
-                    userNameColumn, locationColumn, emailColumn, clientColumn);
+                    projectPkColumn, filePkColumn, filesProjectFkColumn, fileNameColumn, urlColumn, 
+                    userNameColumn, locationColumn, emailColumn, clientColumn, emailItemsTable, userItemsTable);
 
                 // Create Excel file
                 using (var workbook = new XLWorkbook())
@@ -149,7 +156,7 @@ namespace FocaExcelExport
         }
 
         private async Task<int> GetRecordCountAsync(int projectId, string projectsTable, string filesTable, string metadataTable,
-            string projectPkColumn, string filePkColumn)
+            string projectPkColumn, string filePkColumn, string filesProjectFkColumn)
         {
             using (var connection = new SqlConnection(_connectionString))
             {
@@ -164,7 +171,7 @@ namespace FocaExcelExport
                     countQuery = $@"
                         SELECT COUNT(*)
                         FROM [dbo].[{filesTable}] f
-                        JOIN [dbo].[{projectsTable}] p ON f.[{projectPkColumn}] = p.[{projectPkColumn}]
+                        JOIN [dbo].[{projectsTable}] p ON f.[{filesProjectFkColumn}] = p.[{projectPkColumn}]
                         LEFT JOIN [dbo].[{metadataTable}] m ON m.[{filePkColumn}] = f.[{filePkColumn}]
                         WHERE p.[{projectPkColumn}] = @ProjectId";
                 }
@@ -174,7 +181,7 @@ namespace FocaExcelExport
                     countQuery = $@"
                         SELECT COUNT(*)
                         FROM [dbo].[{filesTable}] f
-                        JOIN [dbo].[{projectsTable}] p ON f.[{projectPkColumn}] = p.[{projectPkColumn}]
+                        JOIN [dbo].[{projectsTable}] p ON f.[{filesProjectFkColumn}] = p.[{projectPkColumn}]
                         WHERE p.[{projectPkColumn}] = @ProjectId";
                 }
                 
@@ -188,8 +195,8 @@ namespace FocaExcelExport
         }
 
         private string BuildExportQuery(string projectsTable, string filesTable, string metadataTable,
-            string projectPkColumn, string filePkColumn, string fileNameColumn, string urlColumn,
-            string userNameColumn, string locationColumn, string emailColumn, string clientColumn)
+            string projectPkColumn, string filePkColumn, string filesProjectFkColumn, string fileNameColumn, string urlColumn,
+            string userNameColumn, string locationColumn, string emailColumn, string clientColumn, string emailItemsTable, string userItemsTable)
         {
             // Based on FOCA migration structure and corrections:
             // Projects table: Id, ProjectName, Domain
@@ -200,8 +207,13 @@ namespace FocaExcelExport
             // UserItems table: Id, Name, Users_Id (FK to Users)
             // EmailItems table: Id, Mail, Emails_Id (FK to Emails)
             
-            // For Fichero (file name), use Path with fallback to basename of URL
-            string ficheroCol = "CASE WHEN f.[Path] IS NOT NULL AND LEN(f.[Path]) > 0 THEN f.[Path] ELSE RIGHT(f.[URL], CHARINDEX('/', REVERSE(f.[URL])) - 1) END";
+            // For Fichero (file name), compute base name from Path or URL
+            // Windows path base name: RIGHT(Path, CHARINDEX('\\\
+            //', REVERSE(Path)+'\\')-1)
+            // URL base name: RIGHT(URL, CHARINDEX('/', REVERSE(URL) + '/') - 1)
+            string ficheroCol = "CASE WHEN f.[Path] IS NOT NULL AND LEN(f.[Path]) > 0 " +
+                                "THEN RIGHT(f.[Path], CHARINDEX('\\\\', REVERSE(f.[Path]) + '\\\\') - 1) " +
+                                "ELSE RIGHT(f.[URL], CHARINDEX('/', REVERSE(f.[URL]) + '/') - 1) END";
             // For URL, use the URL column
             string urlCol = "f.[URL]";
             // For Usuario (user), join through MetaExtractors -> Users -> UserItems
@@ -214,6 +226,8 @@ namespace FocaExcelExport
             string clienteCol = "p.[Domain]";
 
             string query;
+            var userItemsJoinTable = string.IsNullOrEmpty(userItemsTable) ? "UserItems" : userItemsTable;
+            var emailItemsJoinTable = string.IsNullOrEmpty(emailItemsTable) ? "EmailItems" : emailItemsTable;
             
             // Handle case where metadata table is found
             if (!string.IsNullOrEmpty(metadataTable))
@@ -229,14 +243,14 @@ namespace FocaExcelExport
                         {emailCol} AS [Email],
                         {clienteCol} AS [Cliente]
                     FROM [dbo].[{filesTable}] f
-                    JOIN [dbo].[{projectsTable}] p ON f.[IdProject] = p.[Id]
+                    JOIN [dbo].[{projectsTable}] p ON f.[{filesProjectFkColumn}] = p.[{projectPkColumn}]
                     LEFT JOIN [dbo].[MetaExtractors] me ON f.[Metadata_Id] = me.[Id]
                     LEFT JOIN [dbo].[Users] u ON me.[FoundUsers_Id] = u.[Id]
-                    LEFT JOIN [dbo].[UserItems] ui ON ui.[Users_Id] = u.[Id]
+                    LEFT JOIN [dbo].[{userItemsJoinTable}] ui ON ui.[Users_Id] = u.[Id]
                     LEFT JOIN [dbo].[Emails] e ON me.[FoundEmails_Id] = e.[Id]
-                    LEFT JOIN [dbo].[EmailItems] ei ON ei.[Emails_Id] = e.[Id]
-                    WHERE p.[Id] = @ProjectId
-                    ORDER BY f.[Path], f.[URL]";
+                    LEFT JOIN [dbo].[{emailItemsJoinTable}] ei ON ei.[Emails_Id] = e.[Id]
+                    WHERE p.[{projectPkColumn}] = @ProjectId
+                    ORDER BY {ficheroCol}";
             }
             else
             {
@@ -244,19 +258,16 @@ namespace FocaExcelExport
                 query = $@"
                     SELECT
                         {ficheroCol} AS [Fichero],
-                        f.[URL] AS [URL],
+                        {urlCol} AS [URL],
                         '' AS [Usuario],
-                        f.[Path] AS [Ubicación],
+                        {ubicacionCol} AS [Ubicación],
                         '' AS [Email],
-                        p.[Domain] AS [Cliente]
+                        {clienteCol} AS [Cliente]
                     FROM [dbo].[{filesTable}] f
-                    JOIN [dbo].[{projectsTable}] p ON f.[IdProject] = p.[Id]
-                    WHERE p.[Id] = @ProjectId
-                    ORDER BY f.[Path], f.[URL]";
+                    JOIN [dbo].[{projectsTable}] p ON f.[{filesProjectFkColumn}] = p.[{projectPkColumn}]
+                    WHERE p.[{projectPkColumn}] = @ProjectId
+                    ORDER BY {ficheroCol}";
             }
-
-            // Apply the WHERE and ORDER BY clauses
-            query += $" WHERE p.[{projectPkColumn}] = @ProjectId ORDER BY {ficheroCol}";
 
             return query;
         }

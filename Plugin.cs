@@ -18,6 +18,9 @@ namespace Foca.ExportImport
 
         public void Initialize()
         {
+            // Initialize the assembly resolver before using any dependencies
+            FocaExcelExport.AssemblyResolver.Init();
+            
             // En runtime con FOCA usar FocaExportImportPluginApi (FOCA_API) para registrar menús.
             System.Windows.Forms.Application.ApplicationExit += (s, e) => { };
         }
@@ -49,8 +52,8 @@ namespace Foca
 
     public class Plugin
     {
-        private string _name = "Export to Excel";
-        private string _description = "Exporta proyectos FOCA a Excel";
+        private string _name = "Exportar a Excel";
+        private string _description = "Exporta proyectos de FOCA a Excel";
         private readonly Export export;
 
         public Export exportItems { get { return this.export; } }
@@ -72,6 +75,10 @@ namespace Foca
             try
             {
                 PluginDiag.Log("Plugin ctor start");
+                
+                // Inicializar el resolver de ensamblados antes de cualquier uso de dependencias
+                FocaExcelExport.AssemblyResolver.Init();
+                
                 this.export = new Export();
 
                 var hostPanel = new Panel { Dock = DockStyle.Fill, Visible = false };
@@ -82,6 +89,7 @@ namespace Foca
                 var root = new ToolStripMenuItem(this._name);
                 
                 // Intentar cargar el icono desde varias ubicaciones posibles
+                bool iconLoaded = false;
                 string[] possiblePaths = {
                     System.IO.Path.Combine(System.IO.Path.GetDirectoryName(typeof(Plugin).Assembly.Location) ?? AppDomain.CurrentDomain.BaseDirectory, "img", "icon.png"),
                     System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "img", "icon.png"),
@@ -97,6 +105,7 @@ namespace Foca
                         {
                             root.Image = System.Drawing.Image.FromFile(path);
                             PluginDiag.Log($"Icon loaded from: {path}");
+                            iconLoaded = true;
                             break; // Si se carga correctamente, salir del bucle
                         }
                     }
@@ -106,8 +115,31 @@ namespace Foca
                         // Probar con la siguiente ruta
                     }
                 }
+
+                if (!iconLoaded)
+                {
+                    try
+                    {
+                        using (var stream = typeof(Plugin).Assembly.GetManifestResourceStream("FocaExcelExport.img.icon.png"))
+                        {
+                            if (stream != null)
+                            {
+                                root.Image = System.Drawing.Image.FromStream(stream);
+                                PluginDiag.Log("Icon loaded from embedded resource: FocaExcelExport.img.icon.png");
+                            }
+                            else
+                            {
+                                PluginDiag.Log("Embedded icon resource not found: FocaExcelExport.img.icon.png");
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        PluginDiag.Log("Failed to load embedded icon: " + ex.Message);
+                    }
+                }
                 
-                var exportItem = new ToolStripMenuItem("Export to Excel");
+                var exportItem = new ToolStripMenuItem("Exportar a Excel");
                 exportItem.Click += (s, e) =>
                 {
                     try
@@ -132,7 +164,7 @@ namespace Foca
             }
             catch (Exception ex)
             {
-                PluginDiag.Log("Plugin ctor error: " + ex);
+                PluginDiag.Log("Plugin ctor error: " + ex.Message);
                 throw;
             }
         }
