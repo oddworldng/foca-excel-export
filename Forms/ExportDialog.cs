@@ -181,7 +181,16 @@ namespace FocaExcelExport
                     if (value < progressBar.Minimum) value = progressBar.Minimum;
                     if (value > progressBar.Maximum) value = progressBar.Maximum;
                     progressBar.Value = value;
-                    lblStatus.Text = $"{progressReport.CurrentRecord} de {progressReport.TotalRecords} registros procesados - {progressReport.StatusMessage}";
+                    var processed = progressReport.CurrentRecord;
+                    var total = progressReport.TotalRecords;
+                    if (total > 0 && processed > total)
+                    {
+                        lblStatus.Text = $"{processed} registros procesados - {progressReport.StatusMessage}";
+                    }
+                    else
+                    {
+                        lblStatus.Text = $"{processed} de {total} registros procesados - {progressReport.StatusMessage}";
+                    }
                 });
                 
                 await exporter.ExportToExcelAsync(project.Id, fileName, progress);

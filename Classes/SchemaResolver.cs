@@ -345,5 +345,72 @@ namespace FocaExcelExport.Classes
             
             return null; // May not exist in this table
         }
+
+        // Additional helpers to discover Applications/Servers tables used to build Software/Equipos columns
+        public async Task<string> FindApplicationsTableAsync()
+        {
+            var tables = await GetTablesAsync();
+            if (tables.Contains("Applications")) return "Applications";
+            // Fallback by heuristic
+            return tables.FirstOrDefault(t => t.IndexOf("Application", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        public async Task<string> FindApplicationItemsTableAsync()
+        {
+            var tables = await GetTablesAsync();
+            if (tables.Contains("ApplicationItems")) return "ApplicationItems";
+            if (tables.Contains("ApplicationsItems")) return "ApplicationsItems";
+            foreach (var t in tables)
+            {
+                if (t.IndexOf("Application", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    t.IndexOf("Item", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    var cols = await GetColumnsAsync(t);
+                    if (cols.Contains("Name")) return t;
+                }
+            }
+            return null;
+        }
+
+        public async Task<string> FindServersTableAsync()
+        {
+            var tables = await GetTablesAsync();
+            if (tables.Contains("Servers")) return "Servers";
+            return tables.FirstOrDefault(t => t.IndexOf("Server", StringComparison.OrdinalIgnoreCase) >= 0);
+        }
+
+        public async Task<string> FindServerItemsTableAsync()
+        {
+            var tables = await GetTablesAsync();
+            if (tables.Contains("ServerItems")) return "ServerItems";
+            if (tables.Contains("ServersItems")) return "ServersItems";
+            foreach (var t in tables)
+            {
+                if (t.IndexOf("Server", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    t.IndexOf("Item", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    var cols = await GetColumnsAsync(t);
+                    if (cols.Contains("Name")) return t;
+                }
+            }
+            return null;
+        }
+
+        public async Task<string> FindComputersItemsTableAsync()
+        {
+            var tables = await GetTablesAsync();
+            if (tables.Contains("ComputersItems")) return "ComputersItems";
+            // Heurística
+            foreach (var t in tables)
+            {
+                if (t.IndexOf("Computer", StringComparison.OrdinalIgnoreCase) >= 0 &&
+                    t.EndsWith("Items", StringComparison.OrdinalIgnoreCase))
+                {
+                    var cols = await GetColumnsAsync(t);
+                    if (cols.Contains("IdProject") && cols.Contains("name")) return t;
+                }
+            }
+            return null;
+        }
     }
 }
