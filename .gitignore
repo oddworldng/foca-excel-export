@@ -420,3 +420,4 @@ FodyWeavers.xsd
 # FOCA related directories
 /foca-project-export/*
 /FOCA/*
+/plugin/*
