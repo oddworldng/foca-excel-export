@@ -97,10 +97,15 @@ namespace FocaExcelExport
                     computersItemsTable,
                     hasFoundUsers, hasFoundEmails, hasFoundApplications, hasFoundServers);
 
+                // Resolve worksheet name from project
+                var worksheetName = await GetProjectNameAsync(projectId, projectsTable, projectPkColumn);
+                if (string.IsNullOrWhiteSpace(worksheetName)) worksheetName = "Export";
+                worksheetName = SanitizeWorksheetName(worksheetName);
+
                 // Create Excel file
                 using (var workbook = new XLWorkbook())
                 {
-                    var worksheet = workbook.Worksheets.Add("Exported Data");
+                    var worksheet = workbook.Worksheets.Add(worksheetName);
                     
                     // Add headers (según captura: Fichero, URL, Usuario, Carpeta, Software, Emails, Clientes (equipos))
                     worksheet.Cell(1, 1).Value = "Fichero";
@@ -156,10 +161,9 @@ namespace FocaExcelExport
                         }
                     }
 
-                    // Format header row
-                    var headerRange = worksheet.Range(1, 1, 1, 7);
-                    headerRange.Style.Font.Bold = true;
-                    headerRange.Style.Fill.BackgroundColor = XLColor.LightGray;
+					// Format header row (sin forzar color de fondo)
+					var headerRange = worksheet.Range(1, 1, 1, 7);
+					headerRange.Style.Font.Bold = true;
 
                     // Convert data range to an Excel Table with headers
                     var totalRows = row - 1;
@@ -247,6 +251,30 @@ namespace FocaExcelExport
             }
         }
 
+        private async Task<string> GetProjectNameAsync(int projectId, string projectsTable, string projectPkColumn)
+        {
+            using (var connection = new SqlConnection(_connectionString))
+            {
+                await connection.OpenAsync();
+                var sql = $"SELECT TOP 1 ProjectName FROM [dbo].[{projectsTable}] WHERE [{projectPkColumn}] = @id";
+                using (var cmd = new SqlCommand(sql, connection))
+                {
+                    cmd.Parameters.AddWithValue("@id", projectId);
+                    var obj = await cmd.ExecuteScalarAsync();
+                    return obj?.ToString();
+                }
+            }
+        }
+
+        private static string SanitizeWorksheetName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "Export";
+            var invalid = new char[] { '\\', '/', '*', '[', ']', ':', '?' };
+            foreach (var c in invalid) name = name.Replace(c, '_');
+            if (name.Length > 31) name = name.Substring(0, 31);
+            return name.Trim();
+        }
+
         private string BuildExportQuery(string projectsTable, string filesTable, string metadataTable,
             string projectPkColumn, string filePkColumn, string filesProjectFkColumn, string fileNameColumn, string urlColumn,
             string userNameColumn, string locationColumn, string emailColumn, string clientColumn, string emailItemsTable, string userItemsTable,
@@ -271,8 +299,7 @@ namespace FocaExcelExport
             string ficheroCol = "RIGHT(f.[URL], CHARINDEX('/', REVERSE(f.[URL]) + '/') - 1)";
             // For URL, use the URL column
             string urlCol = "f.[URL]";
-            // Para 'Carpeta' queremos Folders desde [PathsItems]; en las filas no-Folders irá vacío
-            string ubicacionCol = "''";
+            // 'Carpeta' se agregará desde [PathsItems] en la selección final
 
             string query;
             var userItemsJoinTable = string.IsNullOrEmpty(userItemsTable) ? "UserItems" : userItemsTable;
@@ -295,112 +322,59 @@ namespace FocaExcelExport
             string emailCol = enableEmails ? "ISNULL(oe.Email, '')" : "''";
             string softwareCol = enableApplications ? "ISNULL(osw.Software, '')" : "''";
             string equiposCol = enableComputersByPcUsername ? "ISNULL(ocn.Equipo, ISNULL(ocx.Equipo, ''))" : (enableComputersByUserId ? "ISNULL(ocx.Equipo, '')" : (enableComputers ? "''" : "''"));
-            
-			// Construir una única hoja con posibles filas repetidas por fichero (una por cada valor de metadato)
-			// Base FROM (sin WHERE) para poder añadir LEFT JOINs adicionales antes del filtro
-			string baseFromNoWhere = $@"
-				FROM [dbo].[{filesTable}] f
-				JOIN [dbo].[{projectsTable}] p ON f.[{filesProjectFkColumn}] = p.[{projectPkColumn}]
-				LEFT JOIN [dbo].[MetaExtractors] me_direct ON f.[Metadata_Id] = me_direct.[Id]
-				LEFT JOIN [dbo].[MetaDatas] md ON f.[Metadata_Id] = md.[Id]
-				LEFT JOIN [dbo].[MetaExtractors] me ON me.[FoundMetaData_Id] = md.[Id]";
-			string whereClause = $"\n\t\t\tWHERE p.[{projectPkColumn}] = @ProjectId";
 
-			string meUsersIdExpr = "ISNULL(me_direct.[FoundUsers_Id], me.[FoundUsers_Id])";
-			string meEmailsIdExpr = "ISNULL(me_direct.[FoundEmails_Id], me.[FoundEmails_Id])";
+            // Agregar metadatos en columnas (una fila por fichero)
+            string meUsersIdExpr = "ISNULL(me_direct.[FoundUsers_Id], me.[FoundUsers_Id])";
+            string meEmailsIdExpr = "ISNULL(me_direct.[FoundEmails_Id], me.[FoundEmails_Id])";
 
-			// 1) Fila base por fichero
-			string baseFileSelect = $@"
-				SELECT DISTINCT
-					{ficheroCol} AS [Fichero],
-					{urlCol} AS [URL],
-					'' AS [Usuario],
-					{ubicacionCol} AS [Carpeta],
-					'' AS [Software],
-					'' AS [Emails],
-					'' AS [Clientes (equipos)]
-				{baseFromNoWhere}{whereClause}";
+            string aggUsersExpr = enableUsers ? $@"ISNULL(STUFF((SELECT DISTINCT CHAR(10) + ui.Name
+                FROM [dbo].[Users] u JOIN [dbo].[{userItemsJoinTable}] ui ON ui.[Users_Id] = u.[Id]
+                WHERE u.[Id] = {meUsersIdExpr}
+                FOR XML PATH(''), TYPE).value('.','nvarchar(max)'),1,1,''), '')" : "''";
 
-			// 2) Usuarios (una fila por usuario)
-			string usersSelect = enableUsers ? $@"
-				SELECT DISTINCT
-					{ficheroCol} AS [Fichero],
-					{urlCol} AS [URL],
-					ui.Name AS [Usuario],
-					{ubicacionCol} AS [Carpeta],
-					'' AS [Software],
-					'' AS [Emails],
-					'' AS [Clientes (equipos)]
-				{baseFromNoWhere}
-				LEFT JOIN [dbo].[Users] u ON u.[Id] = {meUsersIdExpr}
-				LEFT JOIN [dbo].[{userItemsJoinTable}] ui ON ui.[Users_Id] = u.[Id]{whereClause}" : "";
+            string aggEmailsExpr = enableEmails ? $@"ISNULL(STUFF((SELECT DISTINCT CHAR(10) + ei.Mail
+                FROM [dbo].[Emails] e JOIN [dbo].[{emailItemsJoinTable}] ei ON ei.[Emails_Id] = e.[Id]
+                WHERE e.[Id] = {meEmailsIdExpr}
+                FOR XML PATH(''), TYPE).value('.','nvarchar(max)'),1,1,''), '')" : "''";
 
-			// 3) Emails (una fila por email)
-			string emailsSelect = enableEmails ? $@"
-				SELECT DISTINCT
-					{ficheroCol} AS [Fichero],
-					{urlCol} AS [URL],
-					'' AS [Usuario],
-					{ubicacionCol} AS [Carpeta],
-					'' AS [Software],
-					ei.Mail AS [Emails],
-					'' AS [Clientes (equipos)]
-				{baseFromNoWhere}
-				LEFT JOIN [dbo].[Emails] e ON e.[Id] = {meEmailsIdExpr}
-				LEFT JOIN [dbo].[{emailItemsJoinTable}] ei ON ei.[Emails_Id] = e.[Id]{whereClause}" : "";
+            string aggSoftwareExpr = enableApplications ? $@"ISNULL(STUFF((SELECT DISTINCT CHAR(10) + ai.Name
+                FROM [dbo].[{applicationItemsJoinTable}] ai
+                WHERE ai.[Applications_Id] = md.[Applications_Id]
+                FOR XML PATH(''), TYPE).value('.','nvarchar(max)'),1,1,''), '')" : "''";
 
-			// 4) Software (una fila por software)
-			string softwareSelect = enableApplications ? $@"
-				SELECT DISTINCT
-					{ficheroCol} AS [Fichero],
-					{urlCol} AS [URL],
-					'' AS [Usuario],
-					{ubicacionCol} AS [Carpeta],
-					ai.Name AS [Software],
-					'' AS [Emails],
-					'' AS [Clientes (equipos)]
-				{baseFromNoWhere}
-				LEFT JOIN [dbo].[{applicationItemsJoinTable}] ai ON ai.[Applications_Id] = md.[Applications_Id]{whereClause}" : "";
+            string aggFoldersExpr = $@"ISNULL(STUFF((SELECT DISTINCT CHAR(10) + pi.[Path]
+                FROM [dbo].[Paths] pth JOIN [dbo].[PathsItems] pi ON pi.[Paths_Id] = pth.[Id]
+                WHERE pth.[Id] = ISNULL(me_direct.[FoundPaths_Id], me.[FoundPaths_Id]) AND pi.[Path] IS NOT NULL
+                FOR XML PATH(''), TYPE).value('.','nvarchar(max)'),1,1,''), '')";
 
-			// 5) Clientes (equipos) (una fila por equipo)
-			string clientsSelect = enableComputers ? $@"
-				SELECT DISTINCT
-					{ficheroCol} AS [Fichero],
-					{urlCol} AS [URL],
-					'' AS [Usuario],
-					{ubicacionCol} AS [Carpeta],
-					'' AS [Software],
-					'' AS [Emails],
-					COALESCE(ci_id.name, ci_name.name) AS [Clientes (equipos)]
-				{baseFromNoWhere}
-				LEFT JOIN [dbo].[Users] u_c ON u_c.[Id] = {meUsersIdExpr}
-				LEFT JOIN [dbo].[{userItemsJoinTable}] ui_c ON ui_c.[Users_Id] = u_c.[Id]
-				LEFT JOIN [dbo].[{computersItemsTable}] ci_id ON ci_id.[IdProject] = f.[{filesProjectFkColumn}] AND ci_id.[type] = 0 AND (ci_id.[Users_Id] = {meUsersIdExpr} OR ci_id.[RemoteUsers_Id] = {meUsersIdExpr})
-				LEFT JOIN [dbo].[{computersItemsTable}] ci_name ON ci_name.[IdProject] = f.[{filesProjectFkColumn}] AND ci_name.[type] = 0 AND UPPER(REPLACE(ci_name.[name],' ','')) COLLATE Latin1_General_CI_AI = UPPER('PC_'+REPLACE(ui_c.[Name],' ','')) COLLATE Latin1_General_CI_AI{whereClause}" : "";
+            string aggClientsExpr = enableComputers ? $@"ISNULL(STUFF((SELECT DISTINCT CHAR(10) + ci.name
+                FROM [dbo].[{computersItemsTable}] ci
+                WHERE ci.[IdProject] = f.[{filesProjectFkColumn}] AND ci.[type] = 0 AND (
+                    ci.[Users_Id] = {meUsersIdExpr} OR ci.[RemoteUsers_Id] = {meUsersIdExpr}
+                    OR UPPER(REPLACE(ci.[name],' ','')) IN (
+                        SELECT UPPER('PC_'+REPLACE(ui2.[Name],' ',''))
+                        FROM [dbo].[Users] u2 JOIN [dbo].[{userItemsJoinTable}] ui2 ON ui2.[Users_Id] = u2.[Id]
+                        WHERE u2.[Id] = {meUsersIdExpr}
+                    )
+                )
+                FOR XML PATH(''), TYPE).value('.','nvarchar(max)'),1,1,''), '')" : "''";
 
-			// 6) Folders (una fila por carpeta desde PathsItems)
-			string foldersSelect = $@"
-				SELECT DISTINCT
-					{ficheroCol} AS [Fichero],
-					{urlCol} AS [URL],
-					'' AS [Usuario],
-					pi.[Path] AS [Carpeta],
-					'' AS [Software],
-					'' AS [Emails],
-					'' AS [Clientes (equipos)]
-				{baseFromNoWhere}
-				LEFT JOIN [dbo].[Paths] pth ON pth.[Id] = ISNULL(me_direct.[FoundPaths_Id], me.[FoundPaths_Id])
-				LEFT JOIN [dbo].[PathsItems] pi ON pi.[Paths_Id] = pth.[Id]
-				{whereClause} AND pi.[Path] IS NOT NULL";
-
-			var parts = new System.Collections.Generic.List<string>();
-			parts.Add(baseFileSelect);
-			if (!string.IsNullOrEmpty(usersSelect)) parts.Add(usersSelect);
-			if (!string.IsNullOrEmpty(emailsSelect)) parts.Add(emailsSelect);
-			if (!string.IsNullOrEmpty(softwareSelect)) parts.Add(softwareSelect);
-			if (!string.IsNullOrEmpty(clientsSelect)) parts.Add(clientsSelect);
-			parts.Add(foldersSelect);
-			query = string.Join("\nUNION ALL\n", parts) + "\nORDER BY 1,2";
+            query = $@"
+                SELECT
+                    {ficheroCol} AS [Fichero],
+                    {urlCol} AS [URL],
+                    {aggUsersExpr} AS [Usuario],
+                    {aggFoldersExpr} AS [Carpeta],
+                    {aggSoftwareExpr} AS [Software],
+                    {aggEmailsExpr} AS [Emails],
+                    {aggClientsExpr} AS [Clientes (equipos)]
+                FROM [dbo].[{filesTable}] f
+                JOIN [dbo].[{projectsTable}] p ON f.[{filesProjectFkColumn}] = p.[{projectPkColumn}]
+                LEFT JOIN [dbo].[MetaExtractors] me_direct ON f.[Metadata_Id] = me_direct.[Id]
+                LEFT JOIN [dbo].[MetaDatas] md ON f.[Metadata_Id] = md.[Id]
+                LEFT JOIN [dbo].[MetaExtractors] me ON me.[FoundMetaData_Id] = md.[Id]
+                WHERE p.[{projectPkColumn}] = @ProjectId
+                ORDER BY {ficheroCol}";
 
             return query;
         }

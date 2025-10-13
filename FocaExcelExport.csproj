@@ -108,6 +108,7 @@
   <ItemGroup>
     <EmbeddedResource Include="img\icon.png" />
     <EmbeddedResource Include="img\export.png" Condition="Exists('img\export.png')" />
+    <EmbeddedResource Include="img\exit.png" Condition="Exists('img\exit.png')" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

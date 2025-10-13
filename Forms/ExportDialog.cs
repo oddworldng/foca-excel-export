@@ -3,12 +3,15 @@ using System.Data.SqlClient;
 using System.Windows.Forms;
 using FocaExcelExport.Classes;
 using System.Threading.Tasks;
+using System.Drawing;
 
 namespace FocaExcelExport
 {
     public partial class ExportDialog : Form
     {
         private readonly string _connectionString;
+        private Image _exportIconBase;
+        private Image _closeIconBase;
         
         public ExportDialog()
         {
@@ -19,9 +22,97 @@ namespace FocaExcelExport
                 var stream = typeof(ExportDialog).Assembly.GetManifestResourceStream("FocaExcelExport.img.export.png");
                 if (stream != null)
                 {
-                    var img = System.Drawing.Image.FromStream(stream);
-                    this.btnExport.Image = new System.Drawing.Bitmap(img, new System.Drawing.Size(16, 16));
+                    _exportIconBase = Image.FromStream(stream);
+                    ApplyExportIconSize();
+                    // Cuando cambie el tamaño (AutoSize) reescalamos el icono para mantener proporción visual
+                    this.btnExport.SizeChanged += (s, e) => { ApplyExportIconSize(); PositionCloseButton(); };
                 }
+                // Icono de cerrar: buscar en varias ubicaciones o como recurso embebido
+                LoadCloseIcon();
+            }
+            catch { }
+
+            // Ajustar posición del botón Cerrar respecto a Exportar
+            PositionCloseButton();
+        }
+
+        private void ApplyExportIconSize()
+        {
+            if (_exportIconBase == null) return;
+            // objetivo: coherente con botones FOCA. Usar 24px o ajustar al alto del botón
+            int target = Math.Min(24, Math.Max(16, this.btnExport.Height - 8));
+            try
+            {
+                var bmp = new Bitmap(_exportIconBase, new Size(target, target));
+                // liberar imagen previa si existiese
+                var old = this.btnExport.Image;
+                this.btnExport.Image = bmp;
+                if (old != null && !ReferenceEquals(old, _exportIconBase)) old.Dispose();
+            }
+            catch { }
+        }
+
+        private void LoadCloseIcon()
+        {
+            try
+            {
+                string asmDir = System.IO.Path.GetDirectoryName(typeof(ExportDialog).Assembly.Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string[] candidates = new[]
+                {
+                    System.IO.Path.Combine(asmDir, "img", "exit.png"),
+                    System.IO.Path.Combine(baseDir, "img", "exit.png"),
+                    System.IO.Path.Combine(asmDir, "exit.png"),
+                    System.IO.Path.Combine(baseDir, "exit.png")
+                };
+                foreach (var p in candidates)
+                {
+                    if (System.IO.File.Exists(p))
+                    {
+                        using (var fs = System.IO.File.OpenRead(p))
+                        {
+                            _closeIconBase = Image.FromStream(fs);
+                        }
+                        break;
+                    }
+                }
+                if (_closeIconBase == null)
+                {
+                    using (var s = typeof(ExportDialog).Assembly.GetManifestResourceStream("FocaExcelExport.img.exit.png"))
+                    {
+                        if (s != null) _closeIconBase = Image.FromStream(s);
+                    }
+                }
+                if (_closeIconBase != null)
+                {
+                    ApplyCloseIconSize();
+                    this.btnClose.SizeChanged += (s, e) => ApplyCloseIconSize();
+                }
+            }
+            catch { }
+        }
+
+        private void ApplyCloseIconSize()
+        {
+            if (_closeIconBase == null) return;
+            int target = Math.Min(20, Math.Max(16, this.btnClose.Height - 8));
+            try
+            {
+                var bmp = new Bitmap(_closeIconBase, new Size(target, target));
+                var old = this.btnClose.Image;
+                this.btnClose.Image = bmp;
+                if (old != null && !ReferenceEquals(old, _closeIconBase)) old.Dispose();
+            }
+            catch { }
+        }
+
+        private void PositionCloseButton()
+        {
+            try
+            {
+                int spacing = 10; // separación coherente
+                this.btnClose.Top = this.btnExport.Top;
+                this.btnClose.Left = this.btnExport.Left + this.btnExport.Width + spacing;
             }
             catch { }
         }
@@ -185,17 +276,25 @@ namespace FocaExcelExport
                     var total = progressReport.TotalRecords;
                     if (total > 0 && processed > total)
                     {
-                        lblStatus.Text = $"{processed} registros procesados - {progressReport.StatusMessage}";
+                        lblStatus.Text = $"{processed} registros procesados";
                     }
                     else
                     {
-                        lblStatus.Text = $"{processed} de {total} registros procesados - {progressReport.StatusMessage}";
+                        lblStatus.Text = $"{processed} de {total} registros procesados";
                     }
                 });
                 
                 await exporter.ExportToExcelAsync(project.Id, fileName, progress);
                 
-                lblStatus.Text = "¡Exportación completada con éxito!";
+                // Mensaje de éxito destacado
+                lblStatus.Text = string.Empty;
+                btnExport.Enabled = false;
+                btnClose.Visible = true;
+                btnClose.Click -= BtnClose_Click; // evitar doble suscripción
+                btnClose.Click += BtnClose_Click;
+                lblSuccess.Text = "Exportación finalizada con éxito";
+                lblSuccess.Visible = true;
+                progressBar.Visible = false;
                 MessageBox.Show("¡Exportación completada con éxito!", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -205,9 +304,13 @@ namespace FocaExcelExport
             }
             finally
             {
-                btnExport.Enabled = true;
-                progressBar.Visible = false;
+                if (!btnClose.Visible) btnExport.Enabled = true;
             }
+        }
+
+        private void BtnClose_Click(object sender, EventArgs e)
+        {
+            try { this.Close(); } catch { }
         }
     }
 

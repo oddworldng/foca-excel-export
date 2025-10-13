@@ -139,8 +139,8 @@ namespace Foca
                     }
                 }
                 
-                var exportItem = new ToolStripMenuItem("Exportar a Excel");
-                exportItem.Click += (s, e) =>
+                // Click directo en el elemento raíz abre el diálogo (sin submenú redundante)
+                root.Click += (s, e) =>
                 {
                     try
                     {
@@ -149,14 +149,12 @@ namespace Foca
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Error launching export dialog: {ex.Message}", 
-                            "Export Error", 
-                            MessageBoxButtons.OK, 
+                        MessageBox.Show($"Error launching export dialog: {ex.Message}",
+                            "Export Error",
+                            MessageBoxButtons.OK,
                             MessageBoxIcon.Error);
                     }
                 };
-                
-                root.DropDownItems.Add(exportItem);
 
                 var pluginMenu = new PluginToolStripMenuItem(root);
                 this.export.Add(pluginMenu);
