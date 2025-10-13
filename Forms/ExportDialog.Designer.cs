@@ -29,6 +29,8 @@ namespace FocaExcelExport
         private void InitializeComponent()
         {
             this.cmbProjects = new System.Windows.Forms.ComboBox();
+            this.chkMulti = new System.Windows.Forms.CheckBox();
+            this.lstProjectsMulti = new System.Windows.Forms.ListBox();
             this.btnExport = new System.Windows.Forms.Button();
             this.btnClose = new System.Windows.Forms.Button();
             this.btnOpen = new System.Windows.Forms.Button();
@@ -51,9 +53,29 @@ namespace FocaExcelExport
             this.cmbProjects.Size = new System.Drawing.Size(428, 21);
             this.cmbProjects.TabIndex = 0;
             // 
+            // chkMulti
+            // 
+            this.chkMulti.AutoSize = true;
+            this.chkMulti.Location = new System.Drawing.Point(15, 154);
+            this.chkMulti.Name = "chkMulti";
+            this.chkMulti.Size = new System.Drawing.Size(323, 17);
+            this.chkMulti.TabIndex = 8;
+            this.chkMulti.Text = "Exportar varios proyectos en un único Excel (cada uno en una hoja)";
+            this.chkMulti.UseVisualStyleBackColor = true;
+            // 
+            // lstProjectsMulti
+            // 
+            this.lstProjectsMulti.FormattingEnabled = true;
+            this.lstProjectsMulti.Location = new System.Drawing.Point(15, 58);
+            this.lstProjectsMulti.Name = "lstProjectsMulti";
+            this.lstProjectsMulti.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
+            this.lstProjectsMulti.Size = new System.Drawing.Size(428, 69);
+            this.lstProjectsMulti.TabIndex = 9;
+            this.lstProjectsMulti.Visible = false;
+            // 
             // btnExport
             // 
-            this.btnExport.Location = new System.Drawing.Point(15, 88);
+            this.btnExport.Location = new System.Drawing.Point(15, 116);
             this.btnExport.Name = "btnExport";
             this.btnExport.AutoSize = true;
             this.btnExport.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
@@ -72,7 +94,7 @@ namespace FocaExcelExport
             // 
             // btnClose
             // 
-            this.btnClose.Location = new System.Drawing.Point(160, 88);
+            this.btnClose.Location = new System.Drawing.Point(160, 116);
             this.btnClose.Name = "btnClose";
             this.btnClose.AutoSize = true;
             this.btnClose.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
@@ -88,7 +110,7 @@ namespace FocaExcelExport
             // 
             // btnOpen
             // 
-            this.btnOpen.Location = new System.Drawing.Point(260, 88);
+            this.btnOpen.Location = new System.Drawing.Point(260, 116);
             this.btnOpen.Name = "btnOpen";
             this.btnOpen.AutoSize = true;
             this.btnOpen.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
@@ -104,9 +126,9 @@ namespace FocaExcelExport
             // 
             // progressBar
             // 
-            this.progressBar.Location = new System.Drawing.Point(15, 132);
+            this.progressBar.Location = new System.Drawing.Point(15, 160);
             this.progressBar.Name = "progressBar";
-            this.progressBar.Size = new System.Drawing.Size(428, 23);
+            this.progressBar.Size = new System.Drawing.Size(428, 20);
             this.progressBar.TabIndex = 2;
             this.progressBar.Visible = false;
             // 
@@ -115,7 +137,7 @@ namespace FocaExcelExport
             this.lblSuccess.AutoSize = true;
             this.lblSuccess.Font = new System.Drawing.Font("Segoe UI", 10F, System.Drawing.FontStyle.Bold);
             this.lblSuccess.ForeColor = System.Drawing.Color.FromArgb(34, 139, 34);
-            this.lblSuccess.Location = new System.Drawing.Point(15, 132);
+            this.lblSuccess.Location = new System.Drawing.Point(15, 160);
             this.lblSuccess.Name = "lblSuccess";
             this.lblSuccess.Size = new System.Drawing.Size(187, 19);
             this.lblSuccess.TabIndex = 7;
@@ -125,7 +147,7 @@ namespace FocaExcelExport
             // lblStatus
             // 
             this.lblStatus.AutoSize = true;
-            this.lblStatus.Location = new System.Drawing.Point(15, 164);
+            this.lblStatus.Location = new System.Drawing.Point(15, 192);
             this.lblStatus.Name = "lblStatus";
             this.lblStatus.Size = new System.Drawing.Size(0, 13);
             this.lblStatus.TabIndex = 3;
@@ -163,7 +185,7 @@ namespace FocaExcelExport
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(458, 192);
+            this.ClientSize = new System.Drawing.Size(458, 240);
             this.Controls.Add(this.panelFooter);
             this.Controls.Add(this.panelHeader);
             this.Controls.Add(this.lblSelectProject);
@@ -173,6 +195,8 @@ namespace FocaExcelExport
             this.Controls.Add(this.btnOpen);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.btnExport);
+            this.Controls.Add(this.chkMulti);
+            this.Controls.Add(this.lstProjectsMulti);
             this.Controls.Add(this.cmbProjects);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -202,5 +226,7 @@ namespace FocaExcelExport
         private System.Windows.Forms.Label lblTitle;
         private System.Windows.Forms.Panel panelFooter;
         private System.Windows.Forms.Label lblSuccess;
+        private System.Windows.Forms.CheckBox chkMulti;
+        private System.Windows.Forms.ListBox lstProjectsMulti;
     }
 }

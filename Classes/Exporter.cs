@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using FocaExcelExport.Classes;
 using System.Net;
 using System.Text.RegularExpressions;
-using System.Collections.Concurrent;
 
 namespace FocaExcelExport
 {
@@ -32,8 +31,7 @@ namespace FocaExcelExport
     public class Exporter
     {
         private readonly string _connectionString;
-        private static readonly ConcurrentDictionary<string, string> _urlToFileNameCache = new ConcurrentDictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
+        
         public Exporter(string connectionString)
         {
             _connectionString = connectionString;
@@ -398,7 +396,6 @@ namespace FocaExcelExport
         private static async Task<string> TryResolveFileNameFromUrlAsync(string url)
         {
             if (string.IsNullOrWhiteSpace(url)) return null;
-            if (_urlToFileNameCache.TryGetValue(url, out var cached)) return cached;
             // HEAD primero
             try
             {
@@ -409,7 +406,7 @@ namespace FocaExcelExport
                 using (var resp = (HttpWebResponse)await req.GetResponseAsync())
                 {
                     var name = GetFileNameFromContentDisposition(resp.Headers["Content-Disposition"]);
-                    if (!string.IsNullOrWhiteSpace(name)) { _urlToFileNameCache[url] = name; return name; }
+                    if (!string.IsNullOrWhiteSpace(name)) return name;
                 }
             }
             catch { }
@@ -425,7 +422,7 @@ namespace FocaExcelExport
                 using (var resp = (HttpWebResponse)await req.GetResponseAsync())
                 {
                     var name = GetFileNameFromContentDisposition(resp.Headers["Content-Disposition"]);
-                    if (!string.IsNullOrWhiteSpace(name)) { _urlToFileNameCache[url] = name; return name; }
+                    if (!string.IsNullOrWhiteSpace(name)) return name;
                 }
             }
             catch { }
@@ -435,7 +432,7 @@ namespace FocaExcelExport
             {
                 var uri = new Uri(url, UriKind.RelativeOrAbsolute);
                 var last = uri.IsAbsoluteUri ? uri.Segments[uri.Segments.Length - 1] : url.Substring(url.LastIndexOf('/') + 1);
-                if (!string.IsNullOrWhiteSpace(last)) { _urlToFileNameCache[url] = last; return last; }
+                if (!string.IsNullOrWhiteSpace(last)) return last;
             }
             catch { }
             return null;

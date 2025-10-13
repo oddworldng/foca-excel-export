@@ -4,6 +4,7 @@ using System.Windows.Forms;
 using FocaExcelExport.Classes;
 using System.Threading.Tasks;
 using System.Drawing;
+using System.Linq;
 
 namespace FocaExcelExport
 {
@@ -37,6 +38,9 @@ namespace FocaExcelExport
 
             // Posicionar botones inicialmente
             PositionActionButtons();
+
+            // Toggle multi-selection
+            this.chkMulti.CheckedChanged += (s, e) => ToggleMultiSelection(this.chkMulti.Checked);
         }
 
         private void ApplyExportIconSize()
@@ -167,16 +171,31 @@ namespace FocaExcelExport
             try
             {
                 int spacing = 10; // separación coherente
-                // Si Abrir Excel está visible, va en la posición del botón Exportar
+                int topAfterSelector = cmbProjects.Visible ? (cmbProjects.Top + cmbProjects.Height + spacing)
+                                                           : (lstProjectsMulti.Top + lstProjectsMulti.Height + spacing);
+                // Colocar checkbox inmediatamente después del selector
+                chkMulti.Top = topAfterSelector;
+
+                // Colocar Exportar/Abrir debajo del checkbox
+                int topButtons = chkMulti.Top + chkMulti.Height + spacing;
                 if (this.btnOpen.Visible)
                 {
-                    this.btnOpen.Top = this.btnExport.Top;
+                    this.btnOpen.Top = topButtons;
                     this.btnOpen.Left = this.btnExport.Left;
                 }
-                // El botón de referencia para colocar Cerrar
+                this.btnExport.Top = topButtons;
+                // Botón Cerrar a la derecha de la referencia
                 var baseBtn = this.btnOpen.Visible ? this.btnOpen : this.btnExport;
-                this.btnClose.Top = baseBtn.Top;
+                this.btnClose.Top = topButtons;
                 this.btnClose.Left = baseBtn.Left + baseBtn.Width + spacing;
+
+                // Colocar barra / mensaje / estado debajo de los botones
+                int topAfterButtons = Math.Max(btnExport.Top + btnExport.Height, btnClose.Top + btnClose.Height) + spacing;
+                if (btnOpen.Visible) topAfterButtons = Math.Max(topAfterButtons, btnOpen.Top + btnOpen.Height + spacing);
+                progressBar.Top = topAfterButtons;
+                lblSuccess.Top = topAfterButtons;
+                lblStatus.Top = topAfterButtons + progressBar.Height + 8;
+                lblStatus.Visible = true;
             }
             catch { }
         }
@@ -184,6 +203,8 @@ namespace FocaExcelExport
         private async void ExportDialog_Load(object sender, EventArgs e)
         {
             await LoadProjectsAsync();
+            // Asegurar layout inicial correcto
+            AdjustDialogLayout();
         }
 
         private async Task LoadProjectsAsync()
@@ -237,6 +258,7 @@ namespace FocaExcelExport
                         using (var reader = await command.ExecuteReaderAsync())
                         {
                             cmbProjects.Items.Clear();
+                            lstProjectsMulti.Items.Clear();
                             
                             while (await reader.ReadAsync())
                             {
@@ -244,11 +266,13 @@ namespace FocaExcelExport
                                 var projectName = reader[1]?.ToString() ?? "Unnamed Project";
                                 
                                 // Add project to combo box with both ID and name
-                                cmbProjects.Items.Add(new ProjectInfo 
+                                var pinfo = new ProjectInfo 
                                 { 
                                     Id = Convert.ToInt32(projectId), 
                                     Name = projectName 
-                                });
+                                };
+                                cmbProjects.Items.Add(pinfo);
+                                lstProjectsMulti.Items.Add(pinfo);
                             }
                         }
                     }
@@ -278,11 +302,28 @@ namespace FocaExcelExport
             }
         }
 
+        private void ToggleMultiSelection(bool enable)
+        {
+            lstProjectsMulti.Visible = enable;
+            cmbProjects.Visible = !enable;
+            // Cambiar texto del label
+            lblSelectProject.Text = enable ? "Selecciona uno o varios proyectos:" : "Selecciona un proyecto:";
+            // Ajustar layout y altura
+            AdjustDialogLayout();
+        }
+
         private async void btnExport_Click(object sender, EventArgs e)
         {
             if (cmbProjects.SelectedItem == null)
             {
                 MessageBox.Show("Selecciona un proyecto para exportar.", "Proyecto no seleccionado", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            // Validación en modo múltiple: exigir selección explícita
+            if (chkMulti.Checked && lstProjectsMulti.SelectedItems.Count == 0)
+            {
+                MessageBox.Show("Selecciona al menos un proyecto en la lista.", "Selecciona proyectos", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
@@ -293,7 +334,29 @@ namespace FocaExcelExport
             {
                 saveDialog.Filter = "Archivos de Excel (*.xlsx)|*.xlsx|Todos los archivos (*.*)|*.*";
                 saveDialog.Title = "Guardar datos exportados";
-                saveDialog.FileName = $"foca_export_{selectedProject.Name}_{DateTime.Now:yyyyMMdd}.xlsx";
+                // Nombre sugerido según selección
+                string datePart = DateTime.Now.ToString("yyyyMMdd");
+                string suggested;
+                if (chkMulti.Checked)
+                {
+                    var enumerable = (lstProjectsMulti.SelectedItems.Count > 0)
+                        ? lstProjectsMulti.SelectedItems.Cast<ProjectInfo>()
+                        : lstProjectsMulti.Items.Cast<ProjectInfo>();
+                    var list = enumerable.ToList();
+                    if (list.Count == 1)
+                    {
+                        suggested = $"{datePart}_Informe_Analisis_{SanitizeForFile(list[0].Name)}_FOCA.xlsx";
+                    }
+                    else
+                    {
+                        suggested = $"{datePart}_Informe_Analisis_FOCA.xlsx";
+                    }
+                }
+                else
+                {
+                    suggested = $"{datePart}_Informe_Analisis_{SanitizeForFile(selectedProject.Name)}_FOCA.xlsx";
+                }
+                saveDialog.FileName = suggested;
                 
                 if (saveDialog.ShowDialog() == DialogResult.OK)
                 {
@@ -315,6 +378,16 @@ namespace FocaExcelExport
                     }
                 }
             }
+        }
+
+        private static string SanitizeForFile(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "Proyecto";
+            // Eliminar espacios y caracteres inválidos de nombre de archivo
+            var invalid = System.IO.Path.GetInvalidFileNameChars();
+            var cleaned = new string(name.Where(c => !invalid.Contains(c)).ToArray());
+            cleaned = cleaned.Replace(" ", string.Empty);
+            return string.IsNullOrWhiteSpace(cleaned) ? "Proyecto" : cleaned;
         }
 
         private async Task ExportProjectAsync(ProjectInfo project, string fileName)
@@ -352,7 +425,75 @@ namespace FocaExcelExport
                     }
                 });
                 
-                await exporter.ExportToExcelAsync(project.Id, fileName, progress);
+                if (!chkMulti.Checked)
+                {
+                    await exporter.ExportToExcelAsync(project.Id, fileName, progress);
+                }
+                else
+                {
+                    // Multi-proyecto: cada proyecto a una hoja
+                    var enumerable = (lstProjectsMulti.SelectedItems.Count > 0)
+                        ? lstProjectsMulti.SelectedItems.Cast<ProjectInfo>()
+                        : lstProjectsMulti.Items.Cast<ProjectInfo>();
+                    var selected = enumerable.ToList();
+                    // Si solo hay uno, mismo flujo que simple pero con prefijo de proyecto
+                    if (selected.Count == 1)
+                    {
+                        var p = selected[0];
+                        var perProject = new Progress<ExportProgress>(r =>
+                        {
+                            var value = r.PercentComplete;
+                            if (value < progressBar.Minimum) value = progressBar.Minimum;
+                            if (value > progressBar.Maximum) value = progressBar.Maximum;
+                            progressBar.Value = value;
+                            lblStatus.Text = $"Progreso de {p.Name}: {r.CurrentRecord} de {r.TotalRecords} procesados";
+                        });
+                        await exporter.ExportToExcelAsync(p.Id, fileName, perProject);
+                    }
+                    else
+                    {
+                        using (var wb = new ClosedXML.Excel.XLWorkbook())
+                        {
+                            int total = selected.Count;
+                            int idx = 0;
+                            foreach (ProjectInfo p in selected)
+                            {
+                                idx++;
+                                // Recuento previo para mejorar el progreso entre proyectos
+                                int rowsForProject = await CountProjectRowsAsync(p.Id);
+                                var perProject = new Progress<ExportProgress>(r =>
+                                {
+                                    // Si el proyecto tiene pocas filas, el progreso real puede ser rápido
+                                    // Escalamos globalmente: (proyecto-1)/total + (r.Percent/100)/total
+                                    var scaled = (int)Math.Round(((idx - 1) * 100.0 + r.PercentComplete) / total);
+                                    if (scaled < progressBar.Minimum) scaled = progressBar.Minimum;
+                                    if (scaled > progressBar.Maximum) scaled = progressBar.Maximum;
+                                    progressBar.Value = scaled;
+                                    lblStatus.Text = $"Progreso de {p.Name}: {r.CurrentRecord} de {r.TotalRecords} procesados";
+                                });
+                                var tempPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".xlsx");
+                                await exporter.ExportToExcelAsync(p.Id, tempPath, perProject);
+                                using (var tempWb = new ClosedXML.Excel.XLWorkbook(tempPath))
+                                {
+                                    var src = tempWb.Worksheets.First();
+                                    // Evitar conflicto de nombres
+                                    var sheetName = src.Name;
+                                    if (wb.Worksheets.Any(ws => string.Equals(ws.Name, sheetName, StringComparison.OrdinalIgnoreCase)))
+                                        sheetName = sheetName + "_" + idx;
+                                    src.CopyTo(wb, sheetName);
+                                    var dst = wb.Worksheets.Worksheet(sheetName);
+                                    if (dst.RangeUsed() == null)
+                                    {
+                                        dst.Cell(1, 1).Value = rowsForProject > 0 ? "Sin datos visibles" : "Sin datos";
+                                        dst.Columns(1, 1).AdjustToContents();
+                                    }
+                                }
+                                try { System.IO.File.Delete(tempPath); } catch { }
+                            }
+                            wb.SaveAs(fileName);
+                        }
+                    }
+                }
                 
                 // Mensaje de éxito destacado
                 lblStatus.Text = string.Empty;
@@ -383,6 +524,40 @@ namespace FocaExcelExport
             }
         }
 
+        private async Task<int> CountProjectRowsAsync(int projectId)
+        {
+            try
+            {
+                var schemaResolver = new SchemaResolver(_connectionString);
+                var projectsTable = await schemaResolver.FindProjectsTableAsync();
+                var filesTable = await schemaResolver.FindFilesTableAsync();
+                var metadataTable = await schemaResolver.FindMetadataTableAsync();
+                var projectPkColumn = await schemaResolver.FindProjectIdColumnAsync(projectsTable);
+                var filePkColumn = await schemaResolver.FindFileIdColumnAsync(filesTable);
+                var filesProjectFkColumn = await schemaResolver.FindFilesProjectFkColumnAsync(filesTable);
+                using (var connection = new SqlConnection(_connectionString))
+                {
+                    await connection.OpenAsync();
+                    string countQuery;
+                    if (!string.IsNullOrEmpty(metadataTable))
+                    {
+                        countQuery = $@"SELECT COUNT(*) FROM [dbo].[{filesTable}] f JOIN [dbo].[{projectsTable}] p ON f.[{filesProjectFkColumn}] = p.[{projectPkColumn}] LEFT JOIN [dbo].[{metadataTable}] m ON m.[{filePkColumn}] = f.[{filePkColumn}] WHERE p.[{projectPkColumn}] = @ProjectId";
+                    }
+                    else
+                    {
+                        countQuery = $@"SELECT COUNT(*) FROM [dbo].[{filesTable}] f JOIN [dbo].[{projectsTable}] p ON f.[{filesProjectFkColumn}] = p.[{projectPkColumn}] WHERE p.[{projectPkColumn}] = @ProjectId";
+                    }
+                    using (var cmd = new SqlCommand(countQuery, connection))
+                    {
+                        cmd.Parameters.AddWithValue("@ProjectId", projectId);
+                        var o = await cmd.ExecuteScalarAsync();
+                        return Convert.ToInt32(o);
+                    }
+                }
+            }
+            catch { return 0; }
+        }
+
         private void BtnClose_Click(object sender, EventArgs e)
         {
             try { this.Close(); } catch { }
@@ -405,6 +580,35 @@ namespace FocaExcelExport
             {
                 MessageBox.Show($"No se pudo abrir el archivo: {ex.Message}", "Abrir Excel", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+        }
+
+        private void AdjustDialogHeight()
+        {
+            try
+            {
+                int bottomVisible = 0;
+                if (lblStatus.Visible) bottomVisible = Math.Max(bottomVisible, lblStatus.Bottom);
+                if (lblSuccess.Visible) bottomVisible = Math.Max(bottomVisible, lblSuccess.Bottom);
+                if (progressBar.Visible) bottomVisible = Math.Max(bottomVisible, progressBar.Bottom);
+                if (bottomVisible == 0)
+                {
+                    // Fallback: debajo del checkbox
+                    bottomVisible = chkMulti.Bottom;
+                }
+                int desired = bottomVisible + 12; // padding inferior moderado
+                int minHeight = 220; // altura mínima más compacta
+                if (this.ClientSize.Height != Math.Max(desired, minHeight))
+                {
+                    this.ClientSize = new Size(this.ClientSize.Width, Math.Max(desired, minHeight));
+                }
+            }
+            catch { }
+        }
+
+        private void AdjustDialogLayout()
+        {
+            PositionActionButtons();
+            AdjustDialogHeight();
         }
     }
 
