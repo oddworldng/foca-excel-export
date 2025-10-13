@@ -12,6 +12,8 @@ namespace FocaExcelExport
         private readonly string _connectionString;
         private Image _exportIconBase;
         private Image _closeIconBase;
+        private Image _openIconBase;
+        private string _lastExportPath;
         
         public ExportDialog()
         {
@@ -24,16 +26,17 @@ namespace FocaExcelExport
                 {
                     _exportIconBase = Image.FromStream(stream);
                     ApplyExportIconSize();
-                    // Cuando cambie el tamaño (AutoSize) reescalamos el icono para mantener proporción visual
-                    this.btnExport.SizeChanged += (s, e) => { ApplyExportIconSize(); PositionCloseButton(); };
+                    // Cuando cambie el tamaño (AutoSize) reescalamos el icono y reposicionamos
+                    this.btnExport.SizeChanged += (s, e) => { ApplyExportIconSize(); PositionActionButtons(); };
                 }
-                // Icono de cerrar: buscar en varias ubicaciones o como recurso embebido
+                // Iconos
                 LoadCloseIcon();
+                LoadOpenIcon();
             }
             catch { }
 
-            // Ajustar posición del botón Cerrar respecto a Exportar
-            PositionCloseButton();
+            // Posicionar botones inicialmente
+            PositionActionButtons();
         }
 
         private void ApplyExportIconSize()
@@ -92,6 +95,59 @@ namespace FocaExcelExport
             catch { }
         }
 
+        private void LoadOpenIcon()
+        {
+            try
+            {
+                string asmDir = System.IO.Path.GetDirectoryName(typeof(ExportDialog).Assembly.Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+                string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+                string[] candidates = new[]
+                {
+                    System.IO.Path.Combine(asmDir, "img", "open.png"),
+                    System.IO.Path.Combine(baseDir, "img", "open.png"),
+                    System.IO.Path.Combine(asmDir, "open.png"),
+                    System.IO.Path.Combine(baseDir, "open.png")
+                };
+                foreach (var p in candidates)
+                {
+                    if (System.IO.File.Exists(p))
+                    {
+                        using (var fs = System.IO.File.OpenRead(p))
+                        {
+                            _openIconBase = Image.FromStream(fs);
+                        }
+                        break;
+                    }
+                }
+                if (_openIconBase == null)
+                {
+                    using (var s = typeof(ExportDialog).Assembly.GetManifestResourceStream("FocaExcelExport.img.open.png"))
+                    {
+                        if (s != null) _openIconBase = Image.FromStream(s);
+                    }
+                }
+                if (_openIconBase != null)
+                {
+                    ApplyOpenIconSize();
+                    this.btnOpen.SizeChanged += (s, e) => ApplyOpenIconSize();
+                }
+            }
+            catch { }
+        }
+
+        private void ApplyOpenIconSize()
+        {
+            if (_openIconBase == null) return;
+            int target = Math.Min(20, Math.Max(16, this.btnOpen.Height - 8));
+            try
+            {
+                var bmp = new Bitmap(_openIconBase, new Size(target, target));
+                var old = this.btnOpen.Image;
+                this.btnOpen.Image = bmp;
+                if (old != null && !ReferenceEquals(old, _openIconBase)) old.Dispose();
+            }
+            catch { }
+        }
         private void ApplyCloseIconSize()
         {
             if (_closeIconBase == null) return;
@@ -106,13 +162,21 @@ namespace FocaExcelExport
             catch { }
         }
 
-        private void PositionCloseButton()
+        private void PositionActionButtons()
         {
             try
             {
                 int spacing = 10; // separación coherente
-                this.btnClose.Top = this.btnExport.Top;
-                this.btnClose.Left = this.btnExport.Left + this.btnExport.Width + spacing;
+                // Si Abrir Excel está visible, va en la posición del botón Exportar
+                if (this.btnOpen.Visible)
+                {
+                    this.btnOpen.Top = this.btnExport.Top;
+                    this.btnOpen.Left = this.btnExport.Left;
+                }
+                // El botón de referencia para colocar Cerrar
+                var baseBtn = this.btnOpen.Visible ? this.btnOpen : this.btnExport;
+                this.btnClose.Top = baseBtn.Top;
+                this.btnClose.Left = baseBtn.Left + baseBtn.Width + spacing;
             }
             catch { }
         }
@@ -262,6 +326,10 @@ namespace FocaExcelExport
                 progressBar.Style = ProgressBarStyle.Continuous;
                 progressBar.Value = 0;
                 lblStatus.Text = "Iniciando exportación...";
+                // Estado inicial botones
+                btnOpen.Visible = false;
+                btnExport.Visible = true;
+                PositionActionButtons();
                 
                 var exporter = new Exporter(_connectionString);
                 
@@ -289,12 +357,19 @@ namespace FocaExcelExport
                 // Mensaje de éxito destacado
                 lblStatus.Text = string.Empty;
                 btnExport.Enabled = false;
+                btnExport.Visible = false; // ocultar Exportar
+                btnOpen.Visible = true; // mostrar Abrir Excel en el lugar de Exportar
                 btnClose.Visible = true;
                 btnClose.Click -= BtnClose_Click; // evitar doble suscripción
                 btnClose.Click += BtnClose_Click;
                 lblSuccess.Text = "Exportación finalizada con éxito";
                 lblSuccess.Visible = true;
                 progressBar.Visible = false;
+                // Guardar ruta y mostrar botón Abrir
+                _lastExportPath = fileName;
+                btnOpen.Click -= BtnOpen_Click;
+                btnOpen.Click += BtnOpen_Click;
+                PositionActionButtons();
                 MessageBox.Show("¡Exportación completada con éxito!", "Éxito", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (Exception ex)
@@ -311,6 +386,25 @@ namespace FocaExcelExport
         private void BtnClose_Click(object sender, EventArgs e)
         {
             try { this.Close(); } catch { }
+        }
+
+        private void BtnOpen_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(_lastExportPath) && System.IO.File.Exists(_lastExportPath))
+                {
+                    System.Diagnostics.Process.Start(_lastExportPath);
+                }
+                else
+                {
+                    MessageBox.Show("No se encontró el archivo exportado.", "Abrir Excel", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"No se pudo abrir el archivo: {ex.Message}", "Abrir Excel", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
     }
 

@@ -31,6 +31,7 @@ namespace FocaExcelExport
             this.cmbProjects = new System.Windows.Forms.ComboBox();
             this.btnExport = new System.Windows.Forms.Button();
             this.btnClose = new System.Windows.Forms.Button();
+            this.btnOpen = new System.Windows.Forms.Button();
             this.progressBar = new System.Windows.Forms.ProgressBar();
             this.lblSuccess = new System.Windows.Forms.Label();
             this.lblStatus = new System.Windows.Forms.Label();
@@ -84,6 +85,22 @@ namespace FocaExcelExport
             this.btnClose.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
             this.btnClose.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText;
             this.btnClose.Padding = new System.Windows.Forms.Padding(8, 0, 8, 0);
+            // 
+            // btnOpen
+            // 
+            this.btnOpen.Location = new System.Drawing.Point(260, 88);
+            this.btnOpen.Name = "btnOpen";
+            this.btnOpen.AutoSize = true;
+            this.btnOpen.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowAndShrink;
+            this.btnOpen.MinimumSize = new System.Drawing.Size(100, 32);
+            this.btnOpen.Size = new System.Drawing.Size(100, 32);
+            this.btnOpen.TabIndex = 7;
+            this.btnOpen.Text = "Abrir Excel";
+            this.btnOpen.UseVisualStyleBackColor = true;
+            this.btnOpen.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
+            this.btnOpen.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText;
+            this.btnOpen.Padding = new System.Windows.Forms.Padding(8, 0, 8, 0);
+            this.btnOpen.Visible = false;
             // 
             // progressBar
             // 
@@ -153,6 +170,7 @@ namespace FocaExcelExport
             this.Controls.Add(this.lblStatus);
             this.Controls.Add(this.progressBar);
             this.Controls.Add(this.lblSuccess);
+            this.Controls.Add(this.btnOpen);
             this.Controls.Add(this.btnClose);
             this.Controls.Add(this.btnExport);
             this.Controls.Add(this.cmbProjects);
@@ -176,6 +194,7 @@ namespace FocaExcelExport
         private System.Windows.Forms.ComboBox cmbProjects;
         private System.Windows.Forms.Button btnExport;
         private System.Windows.Forms.Button btnClose;
+        private System.Windows.Forms.Button btnOpen;
         private System.Windows.Forms.ProgressBar progressBar;
         private System.Windows.Forms.Label lblStatus;
         private System.Windows.Forms.Label lblSelectProject;
