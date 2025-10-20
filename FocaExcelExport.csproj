@@ -18,7 +18,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
-    <OutputPath>plugin\</OutputPath>
+    <OutputPath>plugin\ExportExcel\</OutputPath>
     <DefineConstants>DEBUG;TRACE;FOCA_API</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
@@ -27,7 +27,7 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
-    <OutputPath>plugin\</OutputPath>
+    <OutputPath>plugin\ExportExcel\</OutputPath>
     <DefineConstants>TRACE;FOCA_API</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>

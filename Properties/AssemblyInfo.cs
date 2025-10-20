@@ -6,7 +6,7 @@ using System.Runtime.InteropServices;
 // set of attributes. Change these attribute values to modify the information
 // associated with an assembly.
 [assembly: AssemblyTitle("FocaExcelExport")]
-[assembly: AssemblyDescription("FOCA plugin to export project metadata to Excel")]
+[assembly: AssemblyDescription("FOCA plugin to export project metadata to Excel (GPL-3.0-or-later)")]
 [assembly: AssemblyConfiguration("")]
 [assembly: AssemblyCompany("ElevenPaths")]
 [assembly: AssemblyProduct("FocaExcelExport")]

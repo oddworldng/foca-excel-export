@@ -22,39 +22,33 @@ FocaExcelExport añade al menú de FOCA la opción “Exportar a Excel”. Al se
 
 ## Instalación
 
-1. Compila el proyecto en Visual Studio (ver “Compilación”).
-2. Copia el contenido de la carpeta de salida del proyecto en la carpeta `Plugins` de FOCA. Por defecto el proyecto genera la salida en `plugin\`:
-   ```
-   Plugins/
-     FocaExcelExport.dll
-     lib/
-       ClosedXML.dll
-       DocumentFormat.OpenXml.dll
-       ExcelNumberFormat.dll
-       System.IO.Packaging.dll
-   ```
-   Nota: las dependencias se copian automáticamente a `plugin\lib` durante el build y el plugin las carga desde `Plugins/lib` mediante un `AssemblyResolver` propio.
+1. Descarga el ZIP del release.
+2. Extrae la carpeta `ExportExcel` completa dentro de `Plugins` de FOCA, quedando:
+   `Plugins/ExportExcel/FocaExcelExport.dll`.
 3. Reinicia FOCA.
 
 ## Uso
 
 1. Abre FOCA.
-2. Menú Plugins → “Exportar a Excel”.
-3. Selecciona el proyecto.
-4. Pulsa “Exportar” y elige el fichero de destino `.xlsx`.
+2. Menú "Plugins" → Load/Unload plugins (carga/descarga de plugins).
+   - Verifica que aparece el plugin `ExportExcel`. 
+   - Si no aparece, copia la carpeta `ExportExcel` a `Plugins` y continua con el siguiente paso.
+3. Menú "Plugins" → "Exportar a Excel".
+   - Submenú "Exportar": selecciona proyecto(s) y guarda el Excel.
+   - Submenú "Comparar": elige Excel base y Excel nuevo (si el fichero de salida ya existe, se sobrescribe sin preguntar).
 
 ## Compilación
 
 1. Abre la solución en Visual Studio (target .NET Framework 4.7.1).
-2. Restaura paquetes NuGet. Solo se referencia `ClosedXML` de forma directa; el resto se resuelve transitivamente.
-3. Compila. La salida se genera en `plugin\` y el target MSBuild copia las DLL necesarias a `plugin\lib`.
+2. Restaura paquetes NuGet (incluye `Fody` y `Costura.Fody`).
+3. Compila en Release. La salida es un único `plugin\\ExportExcel\\FocaExcelExport.dll` (dependencias embebidas), listo para comprimir la carpeta `ExportExcel`.
 
 ## Estructura del proyecto
 
 ```
 foca-excel-export/
 ├── Classes/
-│   ├── AssemblyResolver.cs     # Carga dependencias desde Plugins/lib
+│   ├── AssemblyResolver.cs     # Resolución de dependencias (embebidas; fallback a Plugins/lib)
 │   ├── ConnectionResolver.cs   # Lee el connection string de FOCA
 │   ├── Exporter.cs             # Consulta SQL dinámica y generación del Excel
 │   └── SchemaResolver.cs       # Descubre tablas/columnas (INFORMATION_SCHEMA)
