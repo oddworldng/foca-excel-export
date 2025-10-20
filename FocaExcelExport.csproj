@@ -57,15 +57,15 @@
       <Private>True</Private>
     </Reference>
     <Reference Include="DocumentFormat.OpenXml">
-      <HintPath>packages\DocumentFormat.OpenXml.2.12.3\lib\net46\DocumentFormat.OpenXml.dll</HintPath>
+      <HintPath>packages\DocumentFormat.OpenXml.2.9.0\lib\net46\DocumentFormat.OpenXml.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="ExcelNumberFormat">
-      <HintPath>packages\ExcelNumberFormat.1.5.0\lib\net20\ExcelNumberFormat.dll</HintPath>
+      <HintPath>plugin\lib\ExcelNumberFormat.dll</HintPath>
       <Private>True</Private>
     </Reference>
     <Reference Include="System.IO.Packaging">
-      <HintPath>packages\System.IO.Packaging.4.7.0\lib\net46\System.IO.Packaging.dll</HintPath>
+      <HintPath>plugin\lib\System.IO.Packaging.dll</HintPath>
       <Private>True</Private>
     </Reference>
   </ItemGroup>
@@ -78,12 +78,19 @@
     <Compile Include="Classes\ConnectionResolver.cs" />
     <Compile Include="Classes\AssemblyResolver.cs" />
     <Compile Include="Classes\Exporter.cs" />
+    <Compile Include="Classes\ExcelComparer.cs" />
     <Compile Include="Classes\SchemaResolver.cs" />
     <Compile Include="Forms\ExportDialog.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\ExportDialog.Designer.cs">
       <DependentUpon>ExportDialog.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\CompareDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\CompareDialog.Designer.cs">
+      <DependentUpon>CompareDialog.cs</DependentUpon>
     </Compile>
     <Compile Include="Plugin.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -102,6 +109,17 @@
     </ItemGroup>
     <Copy SourceFiles="@(DllsToCopy)" DestinationFolder="$(OutDir)lib" SkipUnchangedFiles="true" />
   </Target>
+  <!-- Copia del DLL a plugin con reintentos por si hay bloqueo momentáneo -->
+  <Target Name="CopyPluginWithRetry" AfterTargets="Build">
+    <ItemGroup>
+      <BuiltDll Include="$(TargetPath)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BuiltDll)"
+          DestinationFolder="$(OutputPath)"
+          Retries="5"
+          RetryDelayMilliseconds="1000"
+          SkipUnchangedFiles="true" />
+  </Target>
   <ItemGroup>
     <None Include="app.config" />
   </ItemGroup>
@@ -110,6 +128,7 @@
     <EmbeddedResource Include="img\export.png" Condition="Exists('img\export.png')" />
     <EmbeddedResource Include="img\exit.png" Condition="Exists('img\exit.png')" />
     <EmbeddedResource Include="img\open.png" Condition="Exists('img\open.png')" />
+    <EmbeddedResource Include="img\comparar.png" Condition="Exists('img\comparar.png')" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

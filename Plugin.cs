@@ -139,8 +139,9 @@ namespace Foca
                     }
                 }
                 
-                // Click directo en el elemento raíz abre el diálogo (sin submenú redundante)
-                root.Click += (s, e) =>
+                // Añadir submenús: Exportar y Comparar
+                var miExportar = new ToolStripMenuItem("Exportar");
+                miExportar.Click += (s, e) =>
                 {
                     try
                     {
@@ -149,12 +150,32 @@ namespace Foca
                     }
                     catch (Exception ex)
                     {
-                        MessageBox.Show($"Error launching export dialog: {ex.Message}",
-                            "Export Error",
+                        MessageBox.Show($"Error al abrir 'Exportar': {ex.Message}",
+                            "Exportar",
                             MessageBoxButtons.OK,
                             MessageBoxIcon.Error);
                     }
                 };
+
+                var miComparar = new ToolStripMenuItem("Comparar");
+                miComparar.Click += (s, e) =>
+                {
+                    try
+                    {
+                        var dialog = new FocaExcelExport.CompareDialog();
+                        dialog.ShowDialog();
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Error al abrir 'Comparar': {ex.Message}",
+                            "Comparar",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error);
+                    }
+                };
+
+                root.DropDownItems.Add(miExportar);
+                root.DropDownItems.Add(miComparar);
 
                 var pluginMenu = new PluginToolStripMenuItem(root);
                 this.export.Add(pluginMenu);

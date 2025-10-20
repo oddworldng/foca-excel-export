@@ -103,7 +103,7 @@ namespace FocaExcelExport
             this.btnClose.TabIndex = 6;
             this.btnClose.Text = "Cerrar";
             this.btnClose.UseVisualStyleBackColor = true;
-            this.btnClose.Visible = false;
+            this.btnClose.Visible = true;
             this.btnClose.ImageAlign = System.Drawing.ContentAlignment.MiddleLeft;
             this.btnClose.TextImageRelation = System.Windows.Forms.TextImageRelation.ImageBeforeText;
             this.btnClose.Padding = new System.Windows.Forms.Padding(8, 0, 8, 0);
