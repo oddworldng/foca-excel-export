@@ -41,6 +41,8 @@ namespace FocaExcelExport
 
             // Toggle multi-selection
             this.chkMulti.CheckedChanged += (s, e) => ToggleMultiSelection(this.chkMulti.Checked);
+            // Habilitar Cerrar desde el inicio
+            this.btnClose.Click += BtnClose_Click;
         }
 
         private void ApplyExportIconSize()
