@@ -93,8 +93,10 @@ namespace FocaExcelExport.Classes
             ws.Cell(1, 5).Value = "Software";
             ws.Cell(1, 6).Value = "Emails";
             ws.Cell(1, 7).Value = "Clientes (equipos)";
-            ws.Cell(1, 8).Value = "Estado"; // Nuevo, Eliminado, Cambiado, Igual
-            ws.Cell(1, 9).Value = "Detalle cambios"; // campos cambiados
+            ws.Cell(1, 8).Value = "Fecha de creacion";
+            ws.Cell(1, 9).Value = "Fecha de modificacion";
+            ws.Cell(1, 10).Value = "Estado"; // Nuevo, Eliminado, Cambiado, Igual
+            ws.Cell(1, 11).Value = "Detalle cambios"; // campos cambiados
 
             var baseRows = ReadRows(baseSheet, keyMode);
             var newRows = ReadRows(newSheet, keyMode);
@@ -141,7 +143,7 @@ namespace FocaExcelExport.Classes
 
             // Tabla y formato
             var totalRows = row - 1;
-            var range = ws.Range(1, 1, Math.Max(1, totalRows), 9);
+            var range = ws.Range(1, 1, Math.Max(1, totalRows), 11);
             var table = range.CreateTable();
             table.ShowAutoFilter = true;
             table.Theme = XLTableTheme.TableStyleMedium9;
@@ -155,13 +157,15 @@ namespace FocaExcelExport.Classes
             ws.Column(5).Width = PxToWidth(400);
             ws.Column(6).Width = PxToWidth(300);
             ws.Column(7).Width = PxToWidth(300);
-            ws.Column(8).Width = PxToWidth(150);
-            ws.Column(9).Width = PxToWidth(300);
+            ws.Column(8).Width = PxToWidth(220);
+            ws.Column(9).Width = PxToWidth(220);
+            ws.Column(10).Width = PxToWidth(150);
+            ws.Column(11).Width = PxToWidth(300);
 
             // Ajuste de texto y alineación como en exportación
             if (totalRows >= 1)
             {
-                var used = ws.Range(1, 1, totalRows, 9);
+                var used = ws.Range(1, 1, totalRows, 11);
                 used.Style.Alignment.WrapText = true;
                 used.Style.Alignment.ShrinkToFit = false;
                 used.Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Left;
@@ -178,7 +182,7 @@ namespace FocaExcelExport.Classes
 
         private static void Highlight(IXLWorksheet ws, int row, string estado)
         {
-            var range = ws.Range(row, 1, row, 9);
+            var range = ws.Range(row, 1, row, 11);
             switch (estado)
             {
                 case "Nuevo":
@@ -208,6 +212,8 @@ namespace FocaExcelExport.Classes
             if (!StringEquals(NormalizeMultiline(b.Software), NormalizeMultiline(n.Software))) diffs.Add("Software");
             if (!StringEquals(NormalizeMultiline(b.Emails), NormalizeMultiline(n.Emails))) diffs.Add("Emails");
             if (!StringEquals(NormalizeMultiline(b.Clients), NormalizeMultiline(n.Clients))) diffs.Add("Clientes (equipos)");
+            if (!StringEquals(b.CreationDate, n.CreationDate)) diffs.Add("Fecha de creacion");
+            if (!StringEquals(b.ModifiedDate, n.ModifiedDate)) diffs.Add("Fecha de modificacion");
             return diffs;
         }
 
@@ -237,8 +243,10 @@ namespace FocaExcelExport.Classes
             ws.Cell(row, 5).Value = d.Software;
             ws.Cell(row, 6).Value = d.Emails;
             ws.Cell(row, 7).Value = d.Clients;
-            ws.Cell(row, 8).Value = estado;
-            ws.Cell(row, 9).Value = detalle;
+            ws.Cell(row, 8).Value = d.CreationDate;
+            ws.Cell(row, 9).Value = d.ModifiedDate;
+            ws.Cell(row, 10).Value = estado;
+            ws.Cell(row, 11).Value = detalle;
         }
 
         private static IEnumerable<RowData> ReadRows(IXLWorksheet sheet, string keyMode)
@@ -258,7 +266,9 @@ namespace FocaExcelExport.Classes
                     Folder = sheet.Cell(r, 4).GetString(),
                     Software = sheet.Cell(r, 5).GetString(),
                     Emails = sheet.Cell(r, 6).GetString(),
-                    Clients = sheet.Cell(r, 7).GetString()
+                    Clients = sheet.Cell(r, 7).GetString(),
+                    CreationDate = sheet.Cell(r, 8).GetString(),
+                    ModifiedDate = sheet.Cell(r, 9).GetString()
                 };
                 if (string.Equals(keyMode, "Fichero|URL", StringComparison.OrdinalIgnoreCase))
                 {
@@ -283,6 +293,8 @@ namespace FocaExcelExport.Classes
             public string Software { get; set; }
             public string Emails { get; set; }
             public string Clients { get; set; }
+            public string CreationDate { get; set; }
+            public string ModifiedDate { get; set; }
         }
     }
 }

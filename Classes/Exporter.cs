@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using FocaExcelExport.Classes;
 using System.Net;
 using System.Text.RegularExpressions;
+using System.Text;
 
 namespace FocaExcelExport
 {
@@ -113,6 +114,8 @@ namespace FocaExcelExport
                     worksheet.Cell(1, 5).Value = "Software";
                     worksheet.Cell(1, 6).Value = "Emails";
                     worksheet.Cell(1, 7).Value = "Clientes (equipos)";
+                    worksheet.Cell(1, 8).Value = "Fecha de creacion";
+                    worksheet.Cell(1, 9).Value = "Fecha de modificacion";
 
                     int row = 2; // Start from row 2 as row 1 has headers
                     
@@ -130,7 +133,8 @@ namespace FocaExcelExport
                                     // Write data to Excel
                                     var urlValue = reader[1]?.ToString() ?? "";
                                     var computedName = reader[0]?.ToString() ?? "";
-                                    var resolvedName = await TryResolveFileNameFromUrlAsync(urlValue) ?? computedName;
+                                    var info = await TryResolveHttpInfoFromUrlAsync(urlValue);
+                                    var resolvedName = info?.FileName ?? computedName;
                                     worksheet.Cell(row, 1).Value = resolvedName;
                                     worksheet.Cell(row, 2).Value = urlValue;
                                     worksheet.Cell(row, 3).Value = reader[2]?.ToString() ?? "";
@@ -138,6 +142,11 @@ namespace FocaExcelExport
                                     worksheet.Cell(row, 5).Value = reader[4]?.ToString() ?? "";
                                     worksheet.Cell(row, 6).Value = reader[5]?.ToString() ?? "";
                                     worksheet.Cell(row, 7).Value = reader[6]?.ToString() ?? "";
+                                    // Fechas PDF si están disponibles
+                                    var createdStr = info?.PdfCreationUtc.HasValue == true ? info.PdfCreationUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") : string.Empty;
+                                    var modifiedStr = info?.PdfModifiedUtc.HasValue == true ? info.PdfModifiedUtc.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss") : string.Empty;
+                                    worksheet.Cell(row, 8).Value = createdStr;
+                                    worksheet.Cell(row, 9).Value = modifiedStr;
 
                                     currentRecord++;
                                     row++;
@@ -160,14 +169,14 @@ namespace FocaExcelExport
                     }
 
 					// Format header row (sin forzar color de fondo)
-					var headerRange = worksheet.Range(1, 1, 1, 7);
+					var headerRange = worksheet.Range(1, 1, 1, 9);
 					headerRange.Style.Font.Bold = true;
 
                     // Convert data range to an Excel Table with headers
                     var totalRows = row - 1;
                     if (totalRows >= 1)
                     {
-                        var tableRange = worksheet.Range(1, 1, totalRows, 7);
+                        var tableRange = worksheet.Range(1, 1, totalRows, 9);
                         var table = tableRange.CreateTable();
                         table.ShowAutoFilter = true;
                         table.Theme = XLTableTheme.TableStyleMedium9;
@@ -185,8 +194,10 @@ namespace FocaExcelExport
                     worksheet.Column(5).Width = PxToWidth(400); // Software
                     worksheet.Column(6).Width = PxToWidth(300); // Emails
                     worksheet.Column(7).Width = PxToWidth(300); // Clientes (equipos)
+                    worksheet.Column(8).Width = PxToWidth(220); // Fecha de creacion
+                    worksheet.Column(9).Width = PxToWidth(220); // Fecha de modificacion
                     // Evitar que el texto desborde a la siguiente celda: no envolver y ajustar para encajar
-                    var usedRange = worksheet.Range(1, 1, totalRows, 7);
+                    var usedRange = worksheet.Range(1, 1, totalRows, 9);
                     // Ajustar texto en cada celda (sin reducir tipografía)
                     usedRange.Style.Alignment.WrapText = true;
                     usedRange.Style.Alignment.ShrinkToFit = false;
@@ -393,9 +404,22 @@ namespace FocaExcelExport
             return null;
         }
 
-        private static async Task<string> TryResolveFileNameFromUrlAsync(string url)
+        // Información resuelta por HTTP y metadatos PDF
+        private sealed class ResolvedHttpInfo
+        {
+            public string FileName { get; set; }
+            public DateTime? PdfCreationUtc { get; set; }
+            public DateTime? PdfModifiedUtc { get; set; }
+        }
+
+        private static async Task<ResolvedHttpInfo> TryResolveHttpInfoFromUrlAsync(string url)
         {
             if (string.IsNullOrWhiteSpace(url)) return null;
+
+            string fileName = null;
+            string contentType = null;
+            long contentLength = -1;
+
             // HEAD primero
             try
             {
@@ -405,37 +429,203 @@ namespace FocaExcelExport
                 req.UserAgent = "FocaExcelExport/1.0";
                 using (var resp = (HttpWebResponse)await req.GetResponseAsync())
                 {
-                    var name = GetFileNameFromContentDisposition(resp.Headers["Content-Disposition"]);
-                    if (!string.IsNullOrWhiteSpace(name)) return name;
+                    fileName = GetFileNameFromContentDisposition(resp.Headers["Content-Disposition"]) ?? fileName;
+                    contentType = resp.ContentType;
+                    long len;
+                    if (long.TryParse(resp.Headers["Content-Length"], out len)) contentLength = len;
                 }
             }
             catch { }
 
-            // GET parcial como fallback
+            // Si aún no hay nombre, intentar con GET parcial (también útil para servidores que no soportan HEAD)
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                try
+                {
+                    var req = (HttpWebRequest)WebRequest.Create(url);
+                    req.Method = "GET";
+                    req.Timeout = 5000;
+                    req.UserAgent = "FocaExcelExport/1.0";
+                    req.AddRange(0, 0);
+                    using (var resp = (HttpWebResponse)await req.GetResponseAsync())
+                    {
+                        fileName = GetFileNameFromContentDisposition(resp.Headers["Content-Disposition"]) ?? fileName;
+                        if (string.IsNullOrEmpty(contentType)) contentType = resp.ContentType;
+                        if (contentLength < 0) contentLength = resp.ContentLength;
+                    }
+                }
+                catch { }
+            }
+
+            // Último segmento de URL como fallback del nombre
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                try
+                {
+                    var uri = new Uri(url, UriKind.RelativeOrAbsolute);
+                    var last = uri.IsAbsoluteUri ? uri.Segments[uri.Segments.Length - 1] : url.Substring(url.LastIndexOf('/') + 1);
+                    if (!string.IsNullOrWhiteSpace(last)) fileName = last;
+                }
+                catch { }
+            }
+
+            var info = new ResolvedHttpInfo { FileName = fileName };
+
+            // Extraer fechas del PDF si procede
+            bool looksPdf = false;
+            try
+            {
+                if (!string.IsNullOrEmpty(contentType) && contentType.IndexOf("pdf", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    looksPdf = true;
+                }
+                else
+                {
+                    // Heurística por extensión de la URL
+                    var cleanUrl = url;
+                    int q = cleanUrl.IndexOf('?');
+                    if (q >= 0) cleanUrl = cleanUrl.Substring(0, q);
+                    int h = cleanUrl.IndexOf('#');
+                    if (h >= 0) cleanUrl = cleanUrl.Substring(0, h);
+                    looksPdf = cleanUrl.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            catch { }
+
+            if (looksPdf)
+            {
+                try
+                {
+                    var dates = await TryFetchPdfDatesAsync(url, contentLength);
+                    if (dates != null)
+                    {
+                        info.PdfCreationUtc = dates.Item1;
+                        info.PdfModifiedUtc = dates.Item2;
+                    }
+                }
+                catch { }
+            }
+
+            return info;
+        }
+
+        private static async Task<Tuple<DateTime?, DateTime?>> TryFetchPdfDatesAsync(string url, long contentLength)
+        {
+            // Leer primeros bytes (XMP suele estar al principio)
+            string headText = null;
             try
             {
                 var req = (HttpWebRequest)WebRequest.Create(url);
                 req.Method = "GET";
-                req.Timeout = 5000;
+                req.Timeout = 7000;
                 req.UserAgent = "FocaExcelExport/1.0";
-                req.AddRange(0, 0);
+                req.AddRange(0, (int)Math.Min(1024 * 1024 - 1, Math.Max(0, contentLength > 0 ? Math.Min(contentLength - 1, 1024 * 1024 - 1) : 1024 * 1024 - 1)));
                 using (var resp = (HttpWebResponse)await req.GetResponseAsync())
+                using (var ms = new MemoryStream())
                 {
-                    var name = GetFileNameFromContentDisposition(resp.Headers["Content-Disposition"]);
-                    if (!string.IsNullOrWhiteSpace(name)) return name;
+                    await resp.GetResponseStream().CopyToAsync(ms);
+                    var bytes = ms.ToArray();
+                    headText = Encoding.ASCII.GetString(bytes);
                 }
             }
             catch { }
 
-            // Último segmento de URL
+            DateTime? created = null;
+            DateTime? modified = null;
+
+            if (!string.IsNullOrEmpty(headText))
+            {
+                // XMP ISO8601
+                try
+                {
+                    var m1 = Regex.Match(headText, @"<xmp:CreateDate>([^<]+)</xmp:CreateDate>", RegexOptions.IgnoreCase);
+                    if (m1.Success) created = TryParseIsoOrPdfDate(m1.Groups[1].Value);
+                    var m2 = Regex.Match(headText, @"<xmp:ModifyDate>([^<]+)</xmp:ModifyDate>", RegexOptions.IgnoreCase);
+                    if (m2.Success) modified = TryParseIsoOrPdfDate(m2.Groups[1].Value);
+                }
+                catch { }
+            }
+
+            // Si no las encontramos, intentar en la cola (Info dictionary suele ir al final)
+            if ((!created.HasValue || !modified.HasValue) && contentLength > 0)
+            {
+                try
+                {
+                    long tail = Math.Min(256 * 1024, contentLength);
+                    long from = Math.Max(0, contentLength - tail);
+                    var req = (HttpWebRequest)WebRequest.Create(url);
+                    req.Method = "GET";
+                    req.Timeout = 7000;
+                    req.UserAgent = "FocaExcelExport/1.0";
+                    req.AddRange(from, contentLength - 1);
+                    using (var resp = (HttpWebResponse)await req.GetResponseAsync())
+                    using (var ms = new MemoryStream())
+                    {
+                        await resp.GetResponseStream().CopyToAsync(ms);
+                        var bytes = ms.ToArray();
+                        var tailText = Encoding.ASCII.GetString(bytes);
+                        if (!created.HasValue)
+                        {
+                            var m = Regex.Match(tailText, @"/CreationDate\s*\(([^\)]+)\)");
+                            if (m.Success) created = TryParseIsoOrPdfDate(m.Groups[1].Value);
+                        }
+                        if (!modified.HasValue)
+                        {
+                            var m = Regex.Match(tailText, @"/ModDate\s*\(([^\)]+)\)");
+                            if (m.Success) modified = TryParseIsoOrPdfDate(m.Groups[1].Value);
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            return Tuple.Create(created, modified);
+        }
+
+        private static DateTime? TryParseIsoOrPdfDate(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return null;
             try
             {
-                var uri = new Uri(url, UriKind.RelativeOrAbsolute);
-                var last = uri.IsAbsoluteUri ? uri.Segments[uri.Segments.Length - 1] : url.Substring(url.LastIndexOf('/') + 1);
-                if (!string.IsNullOrWhiteSpace(last)) return last;
+                // Quitar prefijo D:
+                var s = raw.Trim();
+                if (s.StartsWith("D:", StringComparison.OrdinalIgnoreCase)) s = s.Substring(2);
+
+                // Intentar ISO 8601 primero
+                if (DateTimeOffset.TryParse(s, out var dto))
+                {
+                    return dto.UtcDateTime;
+                }
+
+                // Formato PDF: YYYYMMDDHHmmSSOHH'mm
+                var re = new Regex(@"^(\d{4})(\d{2})?(\d{2})?(\d{2})?(\d{2})?(\d{2})?([Zz]|[\+\-]\d{2}'?\d{2}')?", RegexOptions.Compiled);
+                var m = re.Match(s);
+                if (!m.Success) return null;
+
+                int year = int.Parse(m.Groups[1].Value);
+                int month = string.IsNullOrEmpty(m.Groups[2].Value) ? 1 : int.Parse(m.Groups[2].Value);
+                int day = string.IsNullOrEmpty(m.Groups[3].Value) ? 1 : int.Parse(m.Groups[3].Value);
+                int hour = string.IsNullOrEmpty(m.Groups[4].Value) ? 0 : int.Parse(m.Groups[4].Value);
+                int minute = string.IsNullOrEmpty(m.Groups[5].Value) ? 0 : int.Parse(m.Groups[5].Value);
+                int second = string.IsNullOrEmpty(m.Groups[6].Value) ? 0 : int.Parse(m.Groups[6].Value);
+                var offsetStr = m.Groups[7].Value;
+
+                TimeSpan offset = TimeSpan.Zero;
+                if (!string.IsNullOrEmpty(offsetStr) && !offsetStr.Equals("Z", StringComparison.OrdinalIgnoreCase))
+                {
+                    // +HH'mm o -HH'mm o +HHmm
+                    var sign = offsetStr[0] == '-' ? -1 : 1;
+                    var digits = offsetStr.TrimStart('+', '-').Replace("'", string.Empty);
+                    int oh = 0, om = 0;
+                    if (digits.Length >= 2) oh = int.Parse(digits.Substring(0, 2));
+                    if (digits.Length >= 4) om = int.Parse(digits.Substring(2, 2));
+                    offset = new TimeSpan(sign * oh, sign * om, 0);
+                }
+
+                var dto2 = new DateTimeOffset(year, month, day, hour, minute, second, offset);
+                return dto2.UtcDateTime;
             }
-            catch { }
-            return null;
+            catch { return null; }
         }
     }
 }
